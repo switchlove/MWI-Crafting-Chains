@@ -1,0 +1,21 @@
+{
+  "name": "mwi-crafting",
+  "version": "1.0.0",
+  "description": "Milky Way Idle crafting chain calculator",
+  "scripts": {
+    "calc": "tsx src/crafting-chain.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@c3d.gg/mwi-types": "^1.12.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
