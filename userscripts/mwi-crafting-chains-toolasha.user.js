@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWI Crafting Chains – Toolasha Inventory Bridge
 // @namespace    https://switchlove.github.io/
-// @version      1.2.0
+// @version      1.3.0
 // @description  Syncs your MWI inventory via Toolasha on the game page, then auto-loads it in Crafting Chains.
 // @author       switchlove
 // @license      MIT
@@ -14,6 +14,7 @@
 // @match        file:///*
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        unsafeWindow
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -21,6 +22,7 @@
   'use strict';
 
   const BRIDGE_KEY = 'mwi_crafting_toolasha_bridge_inventory';
+  const BRIDGE_STATUS_KEY = 'mwi_crafting_toolasha_bridge_status';
   const INVENTORY_LOCATION = '/item_locations/inventory';
   const TEXTAREA_ID = 'inventoryJson';
   const HINTS_CLASS = 'inventory-hints';
@@ -44,6 +46,13 @@
     GM_setValue(BRIDGE_KEY, JSON.stringify(payload));
   }
 
+  function writeBridgeStatus(status) {
+    GM_setValue(BRIDGE_STATUS_KEY, JSON.stringify({
+      ...status,
+      updatedAt: Date.now(),
+    }));
+  }
+
   function readBridgeData() {
     const raw = GM_getValue(BRIDGE_KEY, null);
     if (!raw) return null;
@@ -55,10 +64,25 @@
     }
   }
 
+  function readBridgeStatus() {
+    const raw = GM_getValue(BRIDGE_STATUS_KEY, null);
+    if (!raw) return null;
+    try {
+      return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch {
+      return null;
+    }
+  }
+
+  function getPageWindow() {
+    return typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+  }
+
   // ── Toolasha inventory extraction on MWI page ─────────────────────
 
   function extractInventoryFromToolashaRuntime() {
-    const inventoryList = window.Toolasha?.Core?.dataManager?.getInventory?.();
+    const pageWindow = getPageWindow();
+    const inventoryList = pageWindow.Toolasha?.Core?.dataManager?.getInventory?.();
     if (!Array.isArray(inventoryList) || inventoryList.length === 0) return null;
 
     const inv = {};
@@ -73,7 +97,7 @@
     if (Object.keys(inv).length === 0) return null;
 
     const characterName =
-      window.Toolasha?.Core?.dataManager?.getCurrentCharacterName?.() ||
+      pageWindow.Toolasha?.Core?.dataManager?.getCurrentCharacterName?.() ||
       null;
 
     return {
@@ -89,16 +113,35 @@
 
     const tick = () => {
       attempts += 1;
+      const pageWindow = getPageWindow();
+      const toolashaPresent = !!pageWindow.Toolasha;
+
       const payload = extractInventoryFromToolashaRuntime();
       if (payload) {
         writeBridgeData(payload);
+        writeBridgeStatus({
+          state: 'synced',
+          attempts,
+          itemCount: Object.keys(payload.inventory || {}).length,
+          characterName: payload.characterName || null,
+        });
         // Keep refreshing occasionally so counts stay current while playing.
         setTimeout(tick, 15000);
         return;
       }
 
+      writeBridgeStatus({
+        state: toolashaPresent ? 'toolasha-found-no-inventory-yet' : 'toolasha-not-found-yet',
+        attempts,
+      });
+
       if (attempts < SYNC_MAX_ATTEMPTS) {
         setTimeout(tick, SYNC_RETRY_MS);
+      } else {
+        writeBridgeStatus({
+          state: toolashaPresent ? 'sync-timeout-no-inventory' : 'sync-timeout-no-toolasha',
+          attempts,
+        });
       }
     };
 
@@ -175,13 +218,16 @@
       attempts += 1;
       const data = readBridgeData();
       if (!data || !data.inventory || Object.keys(data.inventory).length === 0) {
+        const status = readBridgeStatus();
         if (attempts >= PLANNER_MAX_ATTEMPTS) {
-          note.textContent = 'Toolasha bridge data not found. Open MWI with Toolasha active, then refresh this page.';
+          const reason = status?.state || 'unknown';
+          note.textContent = `Toolasha bridge data not found (reason: ${reason}). Open MWI with Toolasha active, wait a few seconds, then refresh.`;
           return;
         }
 
         if (attempts % 10 === 0) {
-          note.textContent = 'Still waiting for Toolasha bridge data from MWI...';
+          const reason = status?.state || 'pending';
+          note.textContent = `Still waiting for Toolasha bridge data from MWI... (${reason})`;
         }
         setTimeout(tryAttach, PLANNER_RETRY_MS);
         return;
