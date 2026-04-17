@@ -1,57 +1,104 @@
 // ==UserScript==
 // @name         MWI Crafting Chains – Toolasha Inventory Bridge
 // @namespace    https://switchlove.github.io/
-// @version      1.0.0
-// @description  Auto-loads your MWI inventory from Toolasha GM storage into the Crafting Chains planner.
+// @version      1.1.0
+// @description  Syncs your MWI inventory via Toolasha on the game page, then auto-loads it in Crafting Chains.
 // @author       switchlove
 // @license      MIT
+// @match        https://www.milkywayidle.com/*
+// @match        https://test.milkywayidle.com/*
 // @match        https://switchlove.github.io/MWI-Crafting-Chains/*
 // @match        http://localhost:*/*
 // @match        file:///*
 // @grant        GM_getValue
+// @grant        GM_setValue
 // @run-at       document-idle
 // ==/UserScript==
 
 (function () {
   'use strict';
 
-  const TOOLASHA_KEY = 'toolasha_init_character_data';
+  const BRIDGE_KEY = 'mwi_crafting_toolasha_bridge_inventory';
   const INVENTORY_LOCATION = '/item_locations/inventory';
   const TEXTAREA_ID = 'inventoryJson';
   const HINTS_CLASS = 'inventory-hints';
+  const SYNC_RETRY_MS = 2000;
+  const SYNC_MAX_ATTEMPTS = 60;
 
-  // ── Read Toolasha GM storage ──────────────────────────────────────
+  function isMwiPage() {
+    const host = window.location.hostname;
+    return host === 'www.milkywayidle.com' || host === 'test.milkywayidle.com';
+  }
 
-  function readToolashaData() {
-    const raw = GM_getValue(TOOLASHA_KEY, null);
+  function isPlannerPage() {
+    return !!document.getElementById(TEXTAREA_ID);
+  }
+
+  // ── Bridge storage helpers ────────────────────────────────────────
+
+  function writeBridgeData(payload) {
+    GM_setValue(BRIDGE_KEY, JSON.stringify(payload));
+  }
+
+  function readBridgeData() {
+    const raw = GM_getValue(BRIDGE_KEY, null);
     if (!raw) return null;
 
-    let parsed;
     try {
-      parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return typeof raw === 'string' ? JSON.parse(raw) : raw;
     } catch {
       return null;
     }
-
-    if (!parsed || parsed.type !== 'init_character_data') return null;
-    return parsed;
   }
 
-  function extractInventory(data) {
-    if (!Array.isArray(data.characterItems)) return null;
+  // ── Toolasha inventory extraction on MWI page ─────────────────────
+
+  function extractInventoryFromToolashaRuntime() {
+    const inventoryList = window.Toolasha?.Core?.dataManager?.getInventory?.();
+    if (!Array.isArray(inventoryList) || inventoryList.length === 0) return null;
+
     const inv = {};
-    for (const item of data.characterItems) {
+    for (const item of inventoryList) {
       if (item.itemLocationHrid !== INVENTORY_LOCATION) continue;
       const n = Number(item.count);
-      if (Number.isFinite(n) && n > 0) {
+      if (Number.isFinite(n) && n > 0 && item.itemHrid) {
         inv[item.itemHrid] = n;
       }
     }
-    return Object.keys(inv).length ? inv : null;
+
+    if (Object.keys(inv).length === 0) return null;
+
+    const characterName =
+      window.Toolasha?.Core?.dataManager?.getCurrentCharacterName?.() ||
+      null;
+
+    return {
+      characterName,
+      inventory: inv,
+      syncedAt: Date.now(),
+      source: 'toolasha-runtime',
+    };
   }
 
-  function getCharacterName(data) {
-    return data?.character?.name || data?.characterItems?.[0]?.characterName || null;
+  function startMwiSyncLoop() {
+    let attempts = 0;
+
+    const tick = () => {
+      attempts += 1;
+      const payload = extractInventoryFromToolashaRuntime();
+      if (payload) {
+        writeBridgeData(payload);
+        // Keep refreshing occasionally so counts stay current while playing.
+        setTimeout(tick, 15000);
+        return;
+      }
+
+      if (attempts < SYNC_MAX_ATTEMPTS) {
+        setTimeout(tick, SYNC_RETRY_MS);
+      }
+    };
+
+    tick();
   }
 
   // ── DOM helpers ───────────────────────────────────────────────────
@@ -92,9 +139,18 @@
     textarea.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
+  function formatAge(ms) {
+    if (!Number.isFinite(ms)) return 'unknown';
+    const minutes = Math.floor(ms / 60000);
+    if (minutes < 1) return 'just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ago`;
+  }
+
   // ── Main ──────────────────────────────────────────────────────────
 
-  async function init() {
+  async function initPlannerUi() {
     // Wait for the inventory hints row to exist in the DOM
     let hintsRow;
     try {
@@ -103,30 +159,23 @@
       return; // Page structure not as expected — bail silently
     }
 
-    const data = readToolashaData();
-    if (!data) {
-      // Toolasha data not found — show a dim info note instead
+    const data = readBridgeData();
+    if (!data || !data.inventory) {
       const note = document.createElement('span');
       note.style.cssText = 'font-size:0.78rem;color:#9aa;';
-      note.textContent = 'Toolasha data not found (play MWI with Toolasha active first)';
+      note.textContent = 'Toolasha bridge data not found. Open MWI with Toolasha active first.';
       hintsRow.appendChild(note);
       return;
     }
 
-    const inv = extractInventory(data);
-    if (!inv) {
-      const note = document.createElement('span');
-      note.style.cssText = 'font-size:0.78rem;color:#9aa;';
-      note.textContent = 'Toolasha: no inventory items found in stored data';
-      hintsRow.appendChild(note);
-      return;
-    }
+    const inv = data.inventory;
+    const syncedAgo = formatAge(Date.now() - Number(data.syncedAt || 0));
 
-    const name = getCharacterName(data);
+    const name = data.characterName;
     const itemCount = Object.keys(inv).length;
     const label = name
-      ? `⬆ Load inventory from Toolasha (${name}, ${itemCount} items)`
-      : `⬆ Load inventory from Toolasha (${itemCount} items)`;
+      ? `⬆ Load from Toolasha (${name}, ${itemCount} items, ${syncedAgo})`
+      : `⬆ Load from Toolasha (${itemCount} items, ${syncedAgo})`;
 
     const btn = injectButton(hintsRow, label, () => {
       fillTextarea(inv);
@@ -140,6 +189,16 @@
 
     // Also expose a global so the page's own JS could call it
     window.__toolashaLoadInventory = () => fillTextarea(inv);
+  }
+
+  function init() {
+    if (isMwiPage()) {
+      startMwiSyncLoop();
+    }
+
+    if (isPlannerPage()) {
+      initPlannerUi();
+    }
   }
 
   init();

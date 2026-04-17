@@ -9,6 +9,7 @@ const state = {
   actionByOutput: new Map(),
   itemMap: new Map(),
   skillMap: new Map(),
+  lastResult: null,
 };
 
 const elements = {
@@ -23,6 +24,8 @@ const elements = {
   inventoryJson: document.getElementById("inventoryJson"),
   calculateBtn: document.getElementById("calculateBtn"),
   exampleBtn: document.getElementById("exampleBtn"),
+  exportJsonBtn: document.getElementById("exportJsonBtn"),
+  exportCsvBtn: document.getElementById("exportCsvBtn"),
   tree: document.getElementById("tree"),
   materials: document.getElementById("materials"),
   skills: document.getElementById("skills"),
@@ -436,6 +439,130 @@ function renderTable(target, headers, rows) {
   target.appendChild(table);
 }
 
+function setExportEnabled(enabled) {
+  elements.exportJsonBtn.disabled = !enabled;
+  elements.exportCsvBtn.disabled = !enabled;
+}
+
+function slugifyForFilename(text) {
+  return String(text || "result")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "result";
+}
+
+function toExportTree(node) {
+  const action = node.action
+    ? {
+        name: node.action.name,
+        hrid: node.action.hrid,
+        sortIndex: node.action.sortIndex ?? null,
+      }
+    : null;
+
+  return {
+    itemHrid: node.itemHrid,
+    itemName: node.itemName,
+    quantityRequested: node.quantityRequested,
+    quantityProducedPerCraft: node.quantityProducedPerCraft,
+    craftsNeeded: node.craftsNeeded,
+    isBaseMaterial: node.isBaseMaterial,
+    totalTimeSeconds: node.totalTimeSeconds,
+    action,
+    children: node.children.map(toExportTree),
+  };
+}
+
+function downloadTextFile(filename, content, mimeType) {
+  const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function escapeCsv(value) {
+  const text = String(value ?? "");
+  if (/[",\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function buildCsvFromLastResult(result) {
+  const lines = [];
+  const stamp = new Date().toISOString();
+
+  lines.push("MWI Crafting Chain Export");
+  lines.push(`Generated At,${escapeCsv(stamp)}`);
+  lines.push(`Target Item,${escapeCsv(result.target.itemName)}`);
+  lines.push(`Target HRID,${escapeCsv(result.target.itemHrid)}`);
+  lines.push(`Quantity,${escapeCsv(result.target.quantity)}`);
+  lines.push(`Recipe Strategy,${escapeCsv(result.target.strategy)}`);
+  lines.push(`Total Time Seconds,${escapeCsv(Math.round(result.stats.totalTimeSeconds))}`);
+  lines.push("");
+
+  lines.push("Base Materials");
+  lines.push("Material,HRID,Need,Have,Missing");
+  result.materialRows.forEach((row) => {
+    lines.push([
+      row.name,
+      row.hrid,
+      row.need,
+      row.have,
+      row.missing,
+    ].map(escapeCsv).join(","));
+  });
+  lines.push("");
+
+  lines.push("Skill Requirements");
+  lines.push("Skill,Min Level");
+  result.skillRows.forEach((row) => {
+    lines.push([row.skill, row.minLevel].map(escapeCsv).join(","));
+  });
+
+  return lines.join("\n");
+}
+
+function exportJson() {
+  if (!state.lastResult) {
+    setStatus("Run Calculate Chain before exporting.", true);
+    return;
+  }
+
+  const result = state.lastResult;
+  const payload = {
+    generatedAt: new Date().toISOString(),
+    target: result.target,
+    stats: result.stats,
+    materials: result.materialRows,
+    skills: result.skillRows,
+    craftTree: toExportTree(result.tree),
+  };
+
+  const filename = `${slugifyForFilename(result.target.itemName)}-chain.json`;
+  downloadTextFile(filename, JSON.stringify(payload, null, 2), "application/json");
+  setStatus(`Exported ${filename}`);
+}
+
+function exportCsv() {
+  if (!state.lastResult) {
+    setStatus("Run Calculate Chain before exporting.", true);
+    return;
+  }
+
+  const result = state.lastResult;
+  const filename = `${slugifyForFilename(result.target.itemName)}-chain.csv`;
+  const csv = buildCsvFromLastResult(result);
+  downloadTextFile(filename, csv, "text/csv");
+  setStatus(`Exported ${filename}`);
+}
+
 async function loadData() {
   try {
     setStatus("Loading data...");
@@ -462,6 +589,8 @@ async function loadData() {
     state.itemMap = new Map(Object.entries(data.itemDetailMap));
     state.skillMap = new Map(Object.entries(data.skillDetailMap));
     state.actionByOutput = buildActionLookup(data.actionDetailMap);
+    state.lastResult = null;
+    setExportEnabled(false);
     populateItemAutocomplete(state.itemMap);
 
     setStatus(
@@ -500,6 +629,7 @@ function calculate() {
   }
 
   try {
+    setExportEnabled(false);
     const parsedInventory = parseInventoryInput(elements.inventoryJson.value || "");
     if (parsedInventory.error) {
       setStatus(parsedInventory.error, true);
@@ -543,6 +673,24 @@ function calculate() {
     elements.statBase.textContent = String(materialRows.length);
     elements.statSkills.textContent = String(skillRows.length);
 
+    state.lastResult = {
+      target: {
+        itemHrid,
+        itemName: state.itemMap.get(itemHrid)?.name || itemHrid,
+        quantity,
+        strategy,
+      },
+      stats: {
+        totalTimeSeconds: tree.totalTimeSeconds,
+        baseMaterialKinds: materialRows.length,
+        skillKinds: skillRows.length,
+      },
+      tree,
+      materialRows,
+      skillRows: skillRows.map(([skill, minLevel]) => ({ skill, minLevel })),
+    };
+    setExportEnabled(true);
+
     const missingKinds = materialRows.filter((row) => row.missing > 0).length;
     const missingTotal = materialRows.reduce((sum, row) => sum + row.missing, 0);
 
@@ -556,6 +704,7 @@ function calculate() {
       );
     }
   } catch (error) {
+    setExportEnabled(false);
     setStatus(error.message, true);
   }
 }
@@ -575,5 +724,9 @@ function loadExample() {
 elements.loadDataBtn.addEventListener("click", loadData);
 elements.calculateBtn.addEventListener("click", calculate);
 elements.exampleBtn.addEventListener("click", loadExample);
+elements.exportJsonBtn.addEventListener("click", exportJson);
+elements.exportCsvBtn.addEventListener("click", exportCsv);
+
+setExportEnabled(false);
 
 loadData();
