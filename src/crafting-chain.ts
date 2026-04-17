@@ -30,6 +30,8 @@ type GameData = {
   actionDetailMap: Record<string, Action>
 }
 
+type RecipeStrategy = 'sort-index' | 'fastest' | 'fewest-inputs' | 'highest-output'
+
 type CraftNode = {
   itemHrid: string
   itemName: string
@@ -151,8 +153,69 @@ function formatItem(itemMap: Map<string, Item>, itemHrid: string): string {
   return itemMap.get(itemHrid)?.name ?? itemHrid
 }
 
-function chooseRecipeForOutput(candidates: Action[]): Action {
-  return candidates[0]
+function parseRecipeStrategy(value: string | undefined): RecipeStrategy {
+  const normalized = (value ?? 'sort-index').toLowerCase()
+  if (
+    normalized === 'sort-index'
+    || normalized === 'fastest'
+    || normalized === 'fewest-inputs'
+    || normalized === 'highest-output'
+  ) {
+    return normalized
+  }
+
+  throw new Error(
+    `Unknown --recipe-strategy: ${value}. Valid values: sort-index, fastest, fewest-inputs, highest-output`,
+  )
+}
+
+function getOutputCount(action: Action, itemHrid: string): number {
+  return action.outputItems?.find((x) => x.itemHrid === itemHrid)?.count ?? 1
+}
+
+function chooseRecipeForOutput(
+  itemHrid: string,
+  candidates: Action[],
+  strategy: RecipeStrategy,
+): Action {
+  if (candidates.length === 1) {
+    return candidates[0]
+  }
+
+  const sorted = [...candidates].sort((a, b) => {
+    if (strategy === 'sort-index') {
+      return (a.sortIndex ?? Number.MAX_SAFE_INTEGER) - (b.sortIndex ?? Number.MAX_SAFE_INTEGER)
+    }
+
+    if (strategy === 'fastest') {
+      const aPerOutput = a.baseTimeCost / getOutputCount(a, itemHrid)
+      const bPerOutput = b.baseTimeCost / getOutputCount(b, itemHrid)
+      if (aPerOutput !== bPerOutput) {
+        return aPerOutput - bPerOutput
+      }
+    }
+
+    if (strategy === 'fewest-inputs') {
+      const aInputs = (a.inputItems ?? []).reduce((sum, input) => sum + input.count, 0)
+      const bInputs = (b.inputItems ?? []).reduce((sum, input) => sum + input.count, 0)
+      const aPerOutput = aInputs / getOutputCount(a, itemHrid)
+      const bPerOutput = bInputs / getOutputCount(b, itemHrid)
+      if (aPerOutput !== bPerOutput) {
+        return aPerOutput - bPerOutput
+      }
+    }
+
+    if (strategy === 'highest-output') {
+      const outputDiff = getOutputCount(b, itemHrid) - getOutputCount(a, itemHrid)
+      if (outputDiff !== 0) {
+        return outputDiff
+      }
+    }
+
+    return (a.sortIndex ?? Number.MAX_SAFE_INTEGER) - (b.sortIndex ?? Number.MAX_SAFE_INTEGER)
+  })
+
+  return sorted[0]
 }
 
 function buildCraftTree(
@@ -161,6 +224,7 @@ function buildCraftTree(
   actionByOutput: Map<string, Action[]>,
   itemMap: Map<string, Item>,
   path: Set<string>,
+  strategy: RecipeStrategy,
 ): CraftNode {
   if (path.has(itemHrid)) {
     throw new Error(`Detected circular dependency while expanding ${itemHrid}`)
@@ -180,8 +244,8 @@ function buildCraftTree(
     }
   }
 
-  const action = chooseRecipeForOutput(candidates)
-  const outputCount = action.outputItems?.find((x) => x.itemHrid === itemHrid)?.count ?? 1
+  const action = chooseRecipeForOutput(itemHrid, candidates, strategy)
+  const outputCount = getOutputCount(action, itemHrid)
   const craftsNeeded = Math.ceil(quantity / outputCount)
 
   const nextPath = new Set(path)
@@ -190,7 +254,7 @@ function buildCraftTree(
   const children: CraftNode[] = []
 
   if (action.upgradeItemHrid && action.upgradeItemHrid !== '') {
-    children.push(buildCraftTree(action.upgradeItemHrid, craftsNeeded, actionByOutput, itemMap, nextPath))
+    children.push(buildCraftTree(action.upgradeItemHrid, craftsNeeded, actionByOutput, itemMap, nextPath, strategy))
   }
 
   for (const input of action.inputItems ?? []) {
@@ -201,6 +265,7 @@ function buildCraftTree(
         actionByOutput,
         itemMap,
         nextPath,
+        strategy,
       ),
     )
   }
@@ -248,6 +313,23 @@ function collectSkillRequirements(node: CraftNode, totals = new Map<string, numb
   }
 
   return totals
+}
+
+function collectAlternativeRecipeItems(
+  node: CraftNode,
+  actionByOutput: Map<string, Action[]>,
+  out = new Set<string>(),
+): Set<string> {
+  const candidates = actionByOutput.get(node.itemHrid) ?? []
+  if (candidates.length > 1) {
+    out.add(node.itemHrid)
+  }
+
+  for (const child of node.children) {
+    collectAlternativeRecipeItems(child, actionByOutput, out)
+  }
+
+  return out
 }
 
 function printTree(node: CraftNode, prefix = '', isLast = true, isRoot = false): void {
@@ -332,6 +414,7 @@ function main(): void {
   const requestedItem = getArgValue(args, '--item')
   const requestedName = getArgValue(args, '--name')
   const quantityRaw = getArgValue(args, '--quantity') ?? '1'
+  const strategy = parseRecipeStrategy(getArgValue(args, '--recipe-strategy'))
   const quantity = Number(quantityRaw)
 
   if (!Number.isFinite(quantity) || quantity <= 0) {
@@ -352,6 +435,7 @@ function main(): void {
     console.log('Usage: npm run calc -- --item=/items/your_item --quantity=1')
     console.log('   or: npm run calc -- --name="Item Name" --quantity=1')
     console.log('Optional inventory file: --inventory=inventory.json')
+    console.log('Optional recipe strategy: --recipe-strategy=sort-index|fastest|fewest-inputs|highest-output')
 
     if (requestedName) {
       console.log('')
@@ -373,9 +457,10 @@ function main(): void {
 
   const inventory = parseInventoryArg(args)
 
-  const tree = buildCraftTree(itemHrid, quantity, actionByOutput, itemMap, new Set())
+  const tree = buildCraftTree(itemHrid, quantity, actionByOutput, itemMap, new Set(), strategy)
   const base = collectBaseMaterials(tree)
   const skills = collectSkillRequirements(tree)
+  const alternativeItems = collectAlternativeRecipeItems(tree, actionByOutput)
 
   console.log('')
   console.log(`Crafting chain for ${formatItem(itemMap, itemHrid)} x${quantity}`)
@@ -399,8 +484,14 @@ function main(): void {
 
   console.log('')
   console.log(`Estimated total base crafting time: ${toDuration(tree.totalTimeSeconds)} (${Math.round(tree.totalTimeSeconds)}s)`)
+  console.log(`Recipe strategy: ${strategy}`)
+  if (alternativeItems.size === 0) {
+    console.log('Strategy effect: none (all items in this chain have a single recipe path).')
+  } else {
+    console.log(`Strategy effect: applied on ${alternativeItems.size} item(s) with multiple recipe options.`)
+  }
   console.log('')
-  console.log('Note: when multiple recipes produce the same item, this tool currently picks the first recipe by sort index.')
+  console.log('Note: recipe strategy controls which recipe is chosen when multiple outputs exist for an item.')
 }
 
 main()

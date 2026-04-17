@@ -65,6 +65,12 @@ By item name:
 npm run calc -- --name="Wooden Bow" --quantity=1
 ```
 
+With recipe strategy:
+
+```bash
+npm run calc -- --name="Wooden Bow" --quantity=1 --recipe-strategy=fastest
+```
+
 Example with current data:
 
 ```bash
@@ -92,11 +98,12 @@ Example `inventory.json`:
 - Base material totals
 - Skill requirements (minimum levels)
 - Estimated total crafting time
+- Recipe strategy-aware path selection when multiple recipes output the same item
 
 ## Notes
 
 - Only production actions are treated as craft recipes.
-- If multiple recipes can create an item, the first recipe by sort order is selected.
+- Recipe strategies supported: `sort-index`, `fastest`, `fewest-inputs`, `highest-output`.
 - Time estimate is the sum of action base times for the whole tree.
 - If a name does not match exactly, the CLI prints close item-name suggestions.
 
@@ -123,6 +130,7 @@ GitHub will publish the site at:
 ### GUI Features
 
 - Loads MWI data JSON from URL or local file upload
+- Search/autocomplete dropdown for item names
 - Builds and renders full crafting dependency trees
 - Shows base material totals and skill requirements
 - Displays estimated total crafting time

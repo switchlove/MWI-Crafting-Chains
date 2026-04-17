@@ -14,8 +14,10 @@ const elements = {
   loadDataBtn: document.getElementById("loadDataBtn"),
   dataStatus: document.getElementById("dataStatus"),
   itemName: document.getElementById("itemName"),
+  itemNameOptions: document.getElementById("itemNameOptions"),
   itemHrid: document.getElementById("itemHrid"),
   quantity: document.getElementById("quantity"),
+  recipeStrategy: document.getElementById("recipeStrategy"),
   calculateBtn: document.getElementById("calculateBtn"),
   exampleBtn: document.getElementById("exampleBtn"),
   tree: document.getElementById("tree"),
@@ -44,8 +46,41 @@ function formatDuration(seconds) {
   return `${s}s`;
 }
 
-function chooseRecipeForOutput(candidates) {
-  return candidates[0];
+function getOutputCount(action, itemHrid) {
+  return (action.outputItems || []).find((o) => o.itemHrid === itemHrid)?.count || 1;
+}
+
+function chooseRecipeForOutput(itemHrid, candidates, strategy) {
+  if (candidates.length === 1) return candidates[0];
+
+  const sorted = [...candidates].sort((a, b) => {
+    if (strategy === "sort-index") {
+      return (a.sortIndex || Number.MAX_SAFE_INTEGER) - (b.sortIndex || Number.MAX_SAFE_INTEGER);
+    }
+
+    if (strategy === "fastest") {
+      const aPerOutput = (a.baseTimeCost || 0) / getOutputCount(a, itemHrid);
+      const bPerOutput = (b.baseTimeCost || 0) / getOutputCount(b, itemHrid);
+      if (aPerOutput !== bPerOutput) return aPerOutput - bPerOutput;
+    }
+
+    if (strategy === "fewest-inputs") {
+      const aInputs = (a.inputItems || []).reduce((sum, input) => sum + (input.count || 0), 0);
+      const bInputs = (b.inputItems || []).reduce((sum, input) => sum + (input.count || 0), 0);
+      const aPerOutput = aInputs / getOutputCount(a, itemHrid);
+      const bPerOutput = bInputs / getOutputCount(b, itemHrid);
+      if (aPerOutput !== bPerOutput) return aPerOutput - bPerOutput;
+    }
+
+    if (strategy === "highest-output") {
+      const outputDiff = getOutputCount(b, itemHrid) - getOutputCount(a, itemHrid);
+      if (outputDiff !== 0) return outputDiff;
+    }
+
+    return (a.sortIndex || Number.MAX_SAFE_INTEGER) - (b.sortIndex || Number.MAX_SAFE_INTEGER);
+  });
+
+  return sorted[0];
 }
 
 function buildActionLookup(actions) {
@@ -116,7 +151,24 @@ function suggestItems(itemMap, query, max = 8) {
     .map((entry) => entry.item);
 }
 
-function buildCraftTree(itemHrid, quantity, path = new Set()) {
+function populateItemAutocomplete(itemMap) {
+  const options = Array.from(itemMap.values())
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .slice(0, 8000);
+
+  const fragment = document.createDocumentFragment();
+  options.forEach((item) => {
+    const option = document.createElement("option");
+    option.value = item.name;
+    option.label = item.hrid;
+    fragment.appendChild(option);
+  });
+
+  elements.itemNameOptions.innerHTML = "";
+  elements.itemNameOptions.appendChild(fragment);
+}
+
+function buildCraftTree(itemHrid, quantity, strategy, path = new Set()) {
   if (path.has(itemHrid)) {
     throw new Error(`Circular dependency detected at ${itemHrid}`);
   }
@@ -138,8 +190,8 @@ function buildCraftTree(itemHrid, quantity, path = new Set()) {
     };
   }
 
-  const action = chooseRecipeForOutput(candidates);
-  const outputCount = (action.outputItems || []).find((o) => o.itemHrid === itemHrid)?.count || 1;
+  const action = chooseRecipeForOutput(itemHrid, candidates, strategy);
+  const outputCount = getOutputCount(action, itemHrid);
   const craftsNeeded = Math.ceil(quantity / outputCount);
 
   const nextPath = new Set(path);
@@ -148,11 +200,11 @@ function buildCraftTree(itemHrid, quantity, path = new Set()) {
   const children = [];
 
   if (action.upgradeItemHrid) {
-    children.push(buildCraftTree(action.upgradeItemHrid, craftsNeeded, nextPath));
+    children.push(buildCraftTree(action.upgradeItemHrid, craftsNeeded, strategy, nextPath));
   }
 
   (action.inputItems || []).forEach((input) => {
-    children.push(buildCraftTree(input.itemHrid, input.count * craftsNeeded, nextPath));
+    children.push(buildCraftTree(input.itemHrid, input.count * craftsNeeded, strategy, nextPath));
   });
 
   const ownTime = ((action.baseTimeCost || 0) / 1000000000) * craftsNeeded;
@@ -189,6 +241,16 @@ function collectSkills(node, totals = new Map()) {
 
   node.children.forEach((child) => collectSkills(child, totals));
   return totals;
+}
+
+function collectAlternativeRecipeItems(node, out = new Set()) {
+  const candidates = state.actionByOutput.get(node.itemHrid) || [];
+  if (candidates.length > 1) {
+    out.add(node.itemHrid);
+  }
+
+  node.children.forEach((child) => collectAlternativeRecipeItems(child, out));
+  return out;
 }
 
 function renderTree(node) {
@@ -284,6 +346,7 @@ async function loadData() {
     state.actionDetailMap = data.actionDetailMap;
     state.itemMap = new Map(Object.entries(data.itemDetailMap));
     state.actionByOutput = buildActionLookup(data.actionDetailMap);
+    populateItemAutocomplete(state.itemMap);
 
     setStatus(
       `Loaded ${Object.keys(state.itemDetailMap).length} items and ${Object.keys(state.actionDetailMap).length} actions.`,
@@ -302,6 +365,7 @@ function calculate() {
   const name = elements.itemName.value.trim();
   const hrid = elements.itemHrid.value.trim();
   const quantity = Number(elements.quantity.value || "1");
+  const strategy = elements.recipeStrategy.value;
 
   if (!Number.isFinite(quantity) || quantity <= 0) {
     setStatus("Quantity must be a positive number.", true);
@@ -320,9 +384,10 @@ function calculate() {
   }
 
   try {
-    const tree = buildCraftTree(itemHrid, quantity);
+    const tree = buildCraftTree(itemHrid, quantity, strategy);
     const materials = collectBaseMaterials(tree);
     const skills = collectSkills(tree);
+    const alternativeItems = collectAlternativeRecipeItems(tree);
 
     renderTree(tree);
 
@@ -341,7 +406,15 @@ function calculate() {
     elements.statBase.textContent = String(materialRows.length);
     elements.statSkills.textContent = String(skillRows.length);
 
-    setStatus(`Calculated chain for ${state.itemMap.get(itemHrid)?.name || itemHrid}.`);
+    if (alternativeItems.size === 0) {
+      setStatus(
+        `Calculated chain for ${state.itemMap.get(itemHrid)?.name || itemHrid} (strategy: ${strategy}). No alternate recipes in this chain, so strategy had no effect.`,
+      );
+    } else {
+      setStatus(
+        `Calculated chain for ${state.itemMap.get(itemHrid)?.name || itemHrid} (strategy: ${strategy}). Strategy applied on ${alternativeItems.size} item(s).`,
+      );
+    }
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -351,6 +424,7 @@ function loadExample() {
   elements.itemName.value = "Basic Food Crate";
   elements.quantity.value = "2";
   elements.itemHrid.value = "";
+  elements.recipeStrategy.value = "sort-index";
 }
 
 elements.loadDataBtn.addEventListener("click", loadData);

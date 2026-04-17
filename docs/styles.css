@@ -137,7 +137,8 @@ label span {
 
 input[type="text"],
 input[type="number"],
-input[type="file"] {
+input[type="file"],
+select {
   width: 100%;
   border-radius: 12px;
   border: 1px solid #bba98a;

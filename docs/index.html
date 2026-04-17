@@ -46,7 +46,7 @@
         <div class="controls-grid">
           <label>
             <span>Item name</span>
-            <input id="itemName" type="text" placeholder="Basic Food Crate" />
+            <input id="itemName" type="text" placeholder="Basic Food Crate" list="itemNameOptions" />
           </label>
           <label>
             <span>Or item HRID</span>
@@ -55,6 +55,15 @@
           <label>
             <span>Quantity</span>
             <input id="quantity" type="number" min="1" value="1" />
+          </label>
+          <label>
+            <span>Recipe strategy</span>
+            <select id="recipeStrategy">
+              <option value="sort-index">Sort Index (default)</option>
+              <option value="fastest">Fastest Per Output</option>
+              <option value="fewest-inputs">Fewest Inputs Per Output</option>
+              <option value="highest-output">Highest Output Per Craft</option>
+            </select>
           </label>
         </div>
         <div class="controls-actions">
@@ -97,11 +106,13 @@
         <h2>Notes</h2>
         <ul class="notes">
           <li>Only production actions are treated as recipes.</li>
-          <li>When multiple recipes output the same item, the first by sort index is selected.</li>
+          <li>When multiple recipes output the same item, recipe strategy controls which one is selected.</li>
           <li>Time estimate is a sum of all action base times in the tree.</li>
         </ul>
       </section>
     </main>
+
+    <datalist id="itemNameOptions"></datalist>
 
     <template id="treeNodeTemplate">
       <li>
