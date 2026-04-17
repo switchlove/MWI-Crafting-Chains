@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         MWI Crafting Chains – Toolasha Inventory Bridge
 // @namespace    https://switchlove.github.io/
-// @version      1.1.0
+// @version      1.2.0
 // @description  Syncs your MWI inventory via Toolasha on the game page, then auto-loads it in Crafting Chains.
 // @author       switchlove
 // @license      MIT
+// @downloadURL  https://raw.githubusercontent.com/switchlove/MWI-Crafting-Chains/main/userscripts/mwi-crafting-chains-toolasha.user.js
+// @updateURL    https://raw.githubusercontent.com/switchlove/MWI-Crafting-Chains/main/userscripts/mwi-crafting-chains-toolasha.user.js
 // @match        https://www.milkywayidle.com/*
 // @match        https://test.milkywayidle.com/*
 // @match        https://switchlove.github.io/MWI-Crafting-Chains/*
@@ -24,6 +26,8 @@
   const HINTS_CLASS = 'inventory-hints';
   const SYNC_RETRY_MS = 2000;
   const SYNC_MAX_ATTEMPTS = 60;
+  const PLANNER_RETRY_MS = 2500;
+  const PLANNER_MAX_ATTEMPTS = 180;
 
   function isMwiPage() {
     const host = window.location.hostname;
@@ -159,36 +163,57 @@
       return; // Page structure not as expected — bail silently
     }
 
-    const data = readBridgeData();
-    if (!data || !data.inventory) {
-      const note = document.createElement('span');
-      note.style.cssText = 'font-size:0.78rem;color:#9aa;';
-      note.textContent = 'Toolasha bridge data not found. Open MWI with Toolasha active first.';
-      hintsRow.appendChild(note);
-      return;
-    }
+    let note = document.createElement('span');
+    note.style.cssText = 'font-size:0.78rem;color:#9aa;';
+    note.textContent = 'Waiting for Toolasha bridge data...';
+    hintsRow.appendChild(note);
 
-    const inv = data.inventory;
-    const syncedAgo = formatAge(Date.now() - Number(data.syncedAt || 0));
+    let attempts = 0;
+    let buttonMounted = false;
 
-    const name = data.characterName;
-    const itemCount = Object.keys(inv).length;
-    const label = name
-      ? `⬆ Load from Toolasha (${name}, ${itemCount} items, ${syncedAgo})`
-      : `⬆ Load from Toolasha (${itemCount} items, ${syncedAgo})`;
+    const tryAttach = () => {
+      attempts += 1;
+      const data = readBridgeData();
+      if (!data || !data.inventory || Object.keys(data.inventory).length === 0) {
+        if (attempts >= PLANNER_MAX_ATTEMPTS) {
+          note.textContent = 'Toolasha bridge data not found. Open MWI with Toolasha active, then refresh this page.';
+          return;
+        }
 
-    const btn = injectButton(hintsRow, label, () => {
-      fillTextarea(inv);
-      btn.textContent = '✓ Loaded!';
-      btn.style.color = '#1a8c55';
-      setTimeout(() => {
-        btn.textContent = label;
-        btn.style.color = '#22a06b';
-      }, 2500);
-    });
+        if (attempts % 10 === 0) {
+          note.textContent = 'Still waiting for Toolasha bridge data from MWI...';
+        }
+        setTimeout(tryAttach, PLANNER_RETRY_MS);
+        return;
+      }
 
-    // Also expose a global so the page's own JS could call it
-    window.__toolashaLoadInventory = () => fillTextarea(inv);
+      const inv = data.inventory;
+      const syncedAgo = formatAge(Date.now() - Number(data.syncedAt || 0));
+      const name = data.characterName;
+      const itemCount = Object.keys(inv).length;
+      const label = name
+        ? `⬆ Load from Toolasha (${name}, ${itemCount} items, ${syncedAgo})`
+        : `⬆ Load from Toolasha (${itemCount} items, ${syncedAgo})`;
+
+      if (!buttonMounted) {
+        const btn = injectButton(hintsRow, label, () => {
+          fillTextarea(inv);
+          btn.textContent = '✓ Loaded!';
+          btn.style.color = '#1a8c55';
+          setTimeout(() => {
+            btn.textContent = label;
+            btn.style.color = '#22a06b';
+          }, 2500);
+        });
+
+        window.__toolashaLoadInventory = () => fillTextarea(inv);
+        buttonMounted = true;
+      }
+
+      note.textContent = `Bridge synced ${syncedAgo}.`;
+    };
+
+    tryAttach();
   }
 
   function init() {
