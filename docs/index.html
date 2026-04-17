@@ -21,7 +21,7 @@
         <p class="eyebrow">Milky Way Idle Planner</p>
         <h1>Crafting Chain Studio</h1>
         <p class="hero-copy">
-          Build full recipe trees, calculate base materials, and estimate total crafting time in your browser.
+          Build full recipe trees, calculate base materials, and estimate total crafting time.
         </p>
       </section>
 
@@ -46,7 +46,7 @@
         <div class="controls-grid">
           <label>
             <span>Item name</span>
-            <input id="itemName" type="text" placeholder="Basic Food Crate" list="itemNameOptions" />
+            <input id="itemName" type="text" placeholder="Expert Tea Crate" list="itemNameOptions" />
           </label>
           <label>
             <span>Or item HRID</span>
@@ -55,15 +55,6 @@
           <label>
             <span>Quantity</span>
             <input id="quantity" type="number" min="1" value="1" />
-          </label>
-          <label>
-            <span>Recipe strategy</span>
-            <select id="recipeStrategy">
-              <option value="sort-index">Sort Index (default)</option>
-              <option value="fastest">Fastest Per Output</option>
-              <option value="fewest-inputs">Fewest Inputs Per Output</option>
-              <option value="highest-output">Highest Output Per Craft</option>
-            </select>
           </label>
         </div>
         <div class="controls-actions">
@@ -88,6 +79,11 @@
       </section>
 
       <section class="panel reveal">
+        <h2>Skill Requirements</h2>
+        <div id="skills" class="table-wrap"></div>
+      </section>
+
+      <section class="panel reveal">
         <h2>Crafting Tree</h2>
         <div id="tree" class="tree"></div>
       </section>
@@ -98,15 +94,10 @@
       </section>
 
       <section class="panel reveal">
-        <h2>Skill Requirements</h2>
-        <div id="skills" class="table-wrap"></div>
-      </section>
-
-      <section class="panel reveal">
         <h2>Notes</h2>
         <ul class="notes">
           <li>Only production actions are treated as recipes.</li>
-          <li>When multiple recipes output the same item, recipe strategy controls which one is selected.</li>
+          <li>If multiple recipes output the same item, the default recipe order is used.</li>
           <li>Time estimate is a sum of all action base times in the tree.</li>
         </ul>
       </section>

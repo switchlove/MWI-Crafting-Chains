@@ -1,11 +1,14 @@
 const DEFAULT_DATA_URL =
   "https://raw.githubusercontent.com/switchlove/MWI-Data/main/init_client_data.json";
+const DEFAULT_RECIPE_STRATEGY = "sort-index";
 
 const state = {
   itemDetailMap: null,
+  skillDetailMap: null,
   actionDetailMap: null,
   actionByOutput: new Map(),
   itemMap: new Map(),
+  skillMap: new Map(),
 };
 
 const elements = {
@@ -17,7 +20,6 @@ const elements = {
   itemNameOptions: document.getElementById("itemNameOptions"),
   itemHrid: document.getElementById("itemHrid"),
   quantity: document.getElementById("quantity"),
-  recipeStrategy: document.getElementById("recipeStrategy"),
   calculateBtn: document.getElementById("calculateBtn"),
   exampleBtn: document.getElementById("exampleBtn"),
   tree: document.getElementById("tree"),
@@ -236,7 +238,8 @@ function collectBaseMaterials(node, totals = new Map()) {
 function collectSkills(node, totals = new Map()) {
   const req = node.action?.levelRequirement;
   if (req && req.skillHrid) {
-    totals.set(req.skillHrid, Math.max(totals.get(req.skillHrid) || 0, req.level || 0));
+    const current = totals.get(req.skillHrid) || 0;
+    totals.set(req.skillHrid, Math.max(current, req.level || 0));
   }
 
   node.children.forEach((child) => collectSkills(child, totals));
@@ -338,18 +341,20 @@ async function loadData() {
 
     const data = JSON.parse(raw);
 
-    if (!data.itemDetailMap || !data.actionDetailMap) {
-      throw new Error("JSON file is missing itemDetailMap or actionDetailMap");
+    if (!data.itemDetailMap || !data.actionDetailMap || !data.skillDetailMap) {
+      throw new Error("JSON file is missing itemDetailMap, skillDetailMap, or actionDetailMap");
     }
 
     state.itemDetailMap = data.itemDetailMap;
+    state.skillDetailMap = data.skillDetailMap;
     state.actionDetailMap = data.actionDetailMap;
     state.itemMap = new Map(Object.entries(data.itemDetailMap));
+    state.skillMap = new Map(Object.entries(data.skillDetailMap));
     state.actionByOutput = buildActionLookup(data.actionDetailMap);
     populateItemAutocomplete(state.itemMap);
 
     setStatus(
-      `Loaded ${Object.keys(state.itemDetailMap).length} items and ${Object.keys(state.actionDetailMap).length} actions.`,
+      `Loaded ${Object.keys(state.itemDetailMap).length} items, ${Object.keys(state.skillDetailMap).length} skills, and ${Object.keys(state.actionDetailMap).length} actions.`,
     );
   } catch (error) {
     setStatus(error.message, true);
@@ -365,7 +370,7 @@ function calculate() {
   const name = elements.itemName.value.trim();
   const hrid = elements.itemHrid.value.trim();
   const quantity = Number(elements.quantity.value || "1");
-  const strategy = elements.recipeStrategy.value;
+  const strategy = DEFAULT_RECIPE_STRATEGY;
 
   if (!Number.isFinite(quantity) || quantity <= 0) {
     setStatus("Quantity must be a positive number.", true);
@@ -397,7 +402,7 @@ function calculate() {
 
     const skillRows = Array.from(skills.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([skillHrid, level]) => [skillHrid, level]);
+      .map(([skillHrid, level]) => [state.skillMap.get(skillHrid)?.name || skillHrid, level]);
 
     renderTable(elements.materials, ["Material", "HRID", "Count"], materialRows);
     renderTable(elements.skills, ["Skill", "Min Level"], skillRows);
@@ -408,11 +413,11 @@ function calculate() {
 
     if (alternativeItems.size === 0) {
       setStatus(
-        `Calculated chain for ${state.itemMap.get(itemHrid)?.name || itemHrid} (strategy: ${strategy}). No alternate recipes in this chain, so strategy had no effect.`,
+        `Calculated chain for ${state.itemMap.get(itemHrid)?.name || itemHrid}. No alternate recipes in this chain.`,
       );
     } else {
       setStatus(
-        `Calculated chain for ${state.itemMap.get(itemHrid)?.name || itemHrid} (strategy: ${strategy}). Strategy applied on ${alternativeItems.size} item(s).`,
+        `Calculated chain for ${state.itemMap.get(itemHrid)?.name || itemHrid}. Alternate recipe options exist for ${alternativeItems.size} item(s).`,
       );
     }
   } catch (error) {
@@ -421,10 +426,9 @@ function calculate() {
 }
 
 function loadExample() {
-  elements.itemName.value = "Basic Food Crate";
-  elements.quantity.value = "2";
+  elements.itemName.value = "Expert Tea Crate";
+  elements.quantity.value = "3";
   elements.itemHrid.value = "";
-  elements.recipeStrategy.value = "sort-index";
 }
 
 elements.loadDataBtn.addEventListener("click", loadData);
