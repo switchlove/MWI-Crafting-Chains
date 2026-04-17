@@ -152,6 +152,8 @@ input[type="number"],
 input[type="file"],
 select {
   width: 100%;
+  box-sizing: border-box;
+  height: 43px;
   border-radius: 4px;
   border: 1px solid #9fb0f2;
   background: #ffffff;
@@ -160,7 +162,27 @@ select {
   font: inherit;
 }
 
+input[type="file"] {
+  padding: 7px 10px;
+}
+
+textarea {
+  width: 100%;
+  border-radius: 4px;
+  border: 1px solid #9fb0f2;
+  background: #ffffff;
+  color: var(--ink);
+  padding: 10px 12px;
+  font: inherit;
+  resize: vertical;
+}
+
 input:focus {
+  outline: 2px solid #4d88e780;
+  border-color: var(--accent);
+}
+
+textarea:focus {
   outline: 2px solid #4d88e780;
   border-color: var(--accent);
 }
@@ -171,6 +193,76 @@ input:focus {
   align-items: center;
   margin-top: 14px;
   flex-wrap: wrap;
+}
+
+/* Inventory hints row */
+.inventory-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.inventory-title {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.inventory-userscript-link {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #22a06b;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+  transition: color 120ms;
+}
+
+.inventory-userscript-link:hover { color: #1a8c55; }
+
+/* Inventory hints row */
+.inventory-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.hint-chip {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-family: monospace;
+  background: #e8ecf8;
+  color: #3b4a7a;
+  border: 1px solid #c5cce8;
+  border-radius: 4px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.btn-link-sm {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 120ms;
+}
+
+.btn-link-sm:hover { color: #1a64b8; }
+
+.label-hint {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--ink-soft);
 }
 
 .btn {

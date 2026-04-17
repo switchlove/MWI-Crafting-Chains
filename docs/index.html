@@ -63,6 +63,30 @@
         </div>
       </section>
 
+      <section class="panel controls-panel reveal">
+        <div class="inventory-header">
+          <span class="inventory-title">Inventory <span class="label-hint">(optional — shows Have / Missing on base materials)</span></span>
+          <a class="inventory-userscript-link" href="https://github.com/switchlove/MWI-Crafting-Chains/blob/main/userscripts/mwi-crafting-chains-toolasha.user.js" target="_blank" rel="noopener" title="Install the Tampermonkey companion script to auto-load your MWI inventory here">
+            Install Toolasha Bridge userscript ↗
+          </a>
+        </div>
+        <textarea
+          id="inventoryJson"
+          rows="6"
+          placeholder="Accepts any of these formats:
+
+• Item Name: qty   →   Sugar: 100
+• HRID map         →   { &quot;/items/sugar&quot;: 100 }
+
+With the Toolasha Bridge userscript installed, a Load button appears here automatically."
+        ></textarea>
+        <div class="inventory-hints">
+          <span class="hint-chip">Sugar: 100</span>
+          <span class="hint-chip">{ &quot;/items/hrid&quot;: qty }</span>
+          <span class="hint-chip">Toolasha JSON paste</span>
+        </div>
+      </section>
+
       <section class="panel stats reveal">
         <article>
           <p class="stat-label">Estimated Total Time</p>

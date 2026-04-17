@@ -20,6 +20,7 @@ const elements = {
   itemNameOptions: document.getElementById("itemNameOptions"),
   itemHrid: document.getElementById("itemHrid"),
   quantity: document.getElementById("quantity"),
+  inventoryJson: document.getElementById("inventoryJson"),
   calculateBtn: document.getElementById("calculateBtn"),
   exampleBtn: document.getElementById("exampleBtn"),
   tree: document.getElementById("tree"),
@@ -168,6 +169,116 @@ function populateItemAutocomplete(itemMap) {
 
   elements.itemNameOptions.innerHTML = "";
   elements.itemNameOptions.appendChild(fragment);
+}
+
+/**
+ * Build a lowercase-name -> hrid lookup map from state.itemMap.
+ * Used for friendly "Item Name: qty" parsing.
+ */
+function buildNameToHridMap() {
+  const map = new Map();
+  for (const [hrid, detail] of state.itemMap) {
+    if (detail && detail.name) {
+      map.set(detail.name.toLowerCase(), hrid);
+    }
+  }
+  return map;
+}
+
+/**
+ * Parse inventory input in any of the supported formats:
+ *  1. Toolasha full init_character_data message  { type: "init_character_data", characterItems: [...] }
+ *  2. characterItems array  [{ itemHrid, count, itemLocationHrid }, ...]
+ *  3. HRID map (original format)  { "/items/sugar": 100, ... }
+ *  4. Friendly "Item Name: qty" lines  (one per line, case-insensitive)
+ */
+function parseInventoryInput(rawText) {
+  const text = rawText.trim();
+  if (!text) return { inventory: new Map(), error: null };
+
+  // ── Try JSON first ──────────────────────────────────────────────
+  let parsed = null;
+  try { parsed = JSON.parse(text); } catch { /* not JSON */ }
+
+  if (parsed !== null) {
+    const inventory = new Map();
+
+    // Format 1: full init_character_data message
+    if (parsed && typeof parsed === "object" && parsed.type === "init_character_data") {
+      const items = parsed.characterItems;
+      if (!Array.isArray(items)) {
+        return { inventory: new Map(), error: "Pasted init_character_data has no characterItems array." };
+      }
+      items.forEach(({ itemHrid, count, itemLocationHrid }) => {
+        if (itemLocationHrid !== "/item_locations/inventory") return;
+        const n = Number(count);
+        if (Number.isFinite(n) && n > 0) inventory.set(itemHrid, n);
+      });
+      return { inventory, error: null };
+    }
+
+    // Format 2: characterItems array  [{ itemHrid, count, itemLocationHrid }]
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0] && "itemHrid" in parsed[0]) {
+      parsed.forEach(({ itemHrid, count, itemLocationHrid }) => {
+        // Accept both inventory-tagged entries and untagged arrays
+        if (itemLocationHrid && itemLocationHrid !== "/item_locations/inventory") return;
+        const n = Number(count);
+        if (Number.isFinite(n) && n > 0) inventory.set(itemHrid, n);
+      });
+      return { inventory, error: null };
+    }
+
+    // Format 3: plain object HRID map  { "/items/sugar": 100 }
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      Object.entries(parsed).forEach(([itemHrid, count]) => {
+        const n = Number(count);
+        if (Number.isFinite(n) && n > 0) inventory.set(itemHrid, n);
+      });
+      return { inventory, error: null };
+    }
+
+    return { inventory: new Map(), error: "Unrecognised JSON format. See the hint below the input." };
+  }
+
+  // ── Format 4: friendly "Item Name: qty" lines ───────────────────
+  if (!state.itemMap.size) {
+    return { inventory: new Map(), error: "Load game data first before using item-name format." };
+  }
+  const nameToHrid = buildNameToHridMap();
+  const inventory = new Map();
+  const unmatched = [];
+
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    // Accept "Name: qty", "Name qty", or "qty Name"
+    const sepMatch = line.match(/^(.+?)[\s:]+(\d[\d,]*)$/) || line.match(/^(\d[\d,]*)\s+(.+)$/);
+    if (!sepMatch) { unmatched.push(line); continue; }
+
+    let namePart = sepMatch[1].trim();
+    let qtyPart  = sepMatch[2].trim();
+    // Handle reversed "qty name" pattern
+    if (/^\d/.test(sepMatch[1])) { [namePart, qtyPart] = [sepMatch[2].trim(), sepMatch[1].trim()]; }
+
+    const n = Number(qtyPart.replace(/,/g, ""));
+    if (!Number.isFinite(n) || n <= 0) { unmatched.push(line); continue; }
+
+    const hrid = nameToHrid.get(namePart.toLowerCase());
+    if (!hrid) { unmatched.push(namePart); continue; }
+
+    inventory.set(hrid, (inventory.get(hrid) || 0) + n);
+  }
+
+  if (inventory.size === 0 && unmatched.length > 0) {
+    return { inventory: new Map(), error: `No items recognised. Unknown: ${unmatched.slice(0, 3).join(", ")}` };
+  }
+
+  const error = unmatched.length
+    ? `Some lines not recognised and were skipped: ${unmatched.slice(0, 3).join(", ")}`
+    : null;
+
+  return { inventory, error };
 }
 
 function buildCraftTree(itemHrid, quantity, strategy, path = new Set()) {
@@ -389,35 +500,59 @@ function calculate() {
   }
 
   try {
+    const parsedInventory = parseInventoryInput(elements.inventoryJson.value || "");
+    if (parsedInventory.error) {
+      setStatus(parsedInventory.error, true);
+      return;
+    }
+
     const tree = buildCraftTree(itemHrid, quantity, strategy);
     const materials = collectBaseMaterials(tree);
     const skills = collectSkills(tree);
     const alternativeItems = collectAlternativeRecipeItems(tree);
+    const inventory = parsedInventory.inventory;
 
     renderTree(tree);
 
     const materialRows = Array.from(materials.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([materialHrid, count]) => [state.itemMap.get(materialHrid)?.name || materialHrid, materialHrid, count]);
+      .map(([materialHrid, count]) => {
+        const have = inventory.get(materialHrid) || 0;
+        const missing = Math.max(0, count - have);
+        return {
+          name: state.itemMap.get(materialHrid)?.name || materialHrid,
+          hrid: materialHrid,
+          need: count,
+          have,
+          missing,
+        };
+      })
+      .sort((a, b) => b.missing - a.missing || b.need - a.need);
 
     const skillRows = Array.from(skills.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([skillHrid, level]) => [state.skillMap.get(skillHrid)?.name || skillHrid, level]);
 
-    renderTable(elements.materials, ["Material", "HRID", "Count"], materialRows);
+    renderTable(
+      elements.materials,
+      ["Material", "HRID", "Need", "Have", "Missing"],
+      materialRows.map((row) => [row.name, row.hrid, row.need, row.have, row.missing]),
+    );
     renderTable(elements.skills, ["Skill", "Min Level"], skillRows);
 
     elements.statTime.textContent = formatDuration(tree.totalTimeSeconds);
     elements.statBase.textContent = String(materialRows.length);
     elements.statSkills.textContent = String(skillRows.length);
 
+    const missingKinds = materialRows.filter((row) => row.missing > 0).length;
+    const missingTotal = materialRows.reduce((sum, row) => sum + row.missing, 0);
+
     if (alternativeItems.size === 0) {
       setStatus(
-        `Calculated chain for ${state.itemMap.get(itemHrid)?.name || itemHrid}. No alternate recipes in this chain.`,
+        `Calculated chain for ${state.itemMap.get(itemHrid)?.name || itemHrid}. Missing: ${missingKinds} material type(s), ${Math.round(missingTotal)} total units. No alternate recipes in this chain.`,
       );
     } else {
       setStatus(
-        `Calculated chain for ${state.itemMap.get(itemHrid)?.name || itemHrid}. Alternate recipe options exist for ${alternativeItems.size} item(s).`,
+        `Calculated chain for ${state.itemMap.get(itemHrid)?.name || itemHrid}. Missing: ${missingKinds} material type(s), ${Math.round(missingTotal)} total units. Alternate recipe options exist for ${alternativeItems.size} item(s).`,
       );
     }
   } catch (error) {
@@ -429,6 +564,12 @@ function loadExample() {
   elements.itemName.value = "Expert Tea Crate";
   elements.quantity.value = "3";
   elements.itemHrid.value = "";
+  // Friendly line format — demonstrates the parser
+  elements.inventoryJson.value = [
+    "Sugar: 100",
+    "Black Tea Leaf: 50",
+    "Coin: 500",
+  ].join("\n");
 }
 
 elements.loadDataBtn.addEventListener("click", loadData);

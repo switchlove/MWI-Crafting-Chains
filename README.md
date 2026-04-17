@@ -134,6 +134,25 @@ GitHub will publish the site at:
 - Builds and renders full crafting dependency trees
 - Shows base material totals and skill requirements
 - Displays estimated total crafting time
+- **Inventory tracking** — Have / Missing columns on base materials; input supports:
+  - Friendly names: `Sugar: 100`
+  - HRID map: `{ "/items/sugar": 100 }`
+  - Full Toolasha data paste (`init_character_data` JSON)
+
+### Toolasha Inventory Bridge (userscript)
+
+If you use [Toolasha](https://greasyfork.org/en/scripts/562662-toolasha) with Tampermonkey, an optional companion userscript can auto-load your MWI character inventory directly into the planner — no copy-paste required.
+
+**Install:**
+
+1. Install [Tampermonkey](https://www.tampermonkey.net/) for your browser.
+2. Install Toolasha from [Greasy Fork](https://greasyfork.org/en/scripts/562662-toolasha) and log into MWI at least once so it captures your character data.
+3. Install the companion script by opening the raw file in Tampermonkey:
+   [`userscripts/mwi-crafting-chains-toolasha.user.js`](userscripts/mwi-crafting-chains-toolasha.user.js)
+
+Once installed, open the planner and an **"⬆ Load inventory from Toolasha"** button will appear inside the Inventory section, showing your character name and item count.
+
+**No Toolasha / Steam?** Use the "Copy console command" button on the page, run the command in the MWI browser console, and paste the result.
 
 By default, the GUI loads data from:
 
