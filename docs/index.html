@@ -39,6 +39,10 @@
         <div class="controls-actions">
           <button id="loadDataBtn" class="btn btn-secondary">Load Data</button>
           <span id="dataStatus" class="status">No data loaded yet.</span>
+          <label class="toggle-label" title="Disable to skip loading the icon sprite sheet (~4 MB)">
+            <input type="checkbox" id="iconsToggle" />
+            <span>Show icons</span>
+          </label>
         </div>
       </section>
 
@@ -55,6 +59,15 @@
           <label>
             <span>Quantity</span>
             <input id="quantity" type="number" min="1" value="1" />
+          </label>
+          <label>
+            <span>Recipe strategy</span>
+            <select id="recipeStrategy">
+              <option value="sort-index">Default (game order)</option>
+              <option value="fastest">Fastest craft</option>
+              <option value="fewest-inputs">Fewest inputs</option>
+              <option value="highest-output">Highest output</option>
+            </select>
           </label>
         </div>
         <div class="controls-actions">
@@ -143,6 +156,44 @@ With the Toolasha Bridge userscript installed, a Load button appears here automa
       </li>
     </template>
 
+    <div id="svg-sprite-container" hidden></div>
+    <script>
+      (function () {
+        var PREF_KEY = 'mwi_icons_enabled';
+        var stored = localStorage.getItem(PREF_KEY);
+        // Default ON if never set
+        var enabled = stored === null ? true : stored === 'true';
+
+        function applyIconState(on) {
+          document.body.classList.toggle('icons-disabled', !on);
+        }
+
+        function loadSprite() {
+          var container = document.getElementById('svg-sprite-container');
+          if (container.innerHTML.trim()) return; // already loaded
+          fetch('./items.svg')
+            .then(function(r) { return r.text(); })
+            .then(function(text) { container.innerHTML = text; });
+        }
+
+        // Apply immediately so first render is correct
+        applyIconState(enabled);
+
+        // Init toggle once DOM is ready
+        document.addEventListener('DOMContentLoaded', function () {
+          var toggle = document.getElementById('iconsToggle');
+          toggle.checked = enabled;
+          if (enabled) loadSprite();
+
+          toggle.addEventListener('change', function () {
+            enabled = toggle.checked;
+            localStorage.setItem(PREF_KEY, enabled);
+            applyIconState(enabled);
+            if (enabled) loadSprite();
+          });
+        });
+      })();
+    </script>
     <script type="module" src="./app.js"></script>
   </body>
 </html>

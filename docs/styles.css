@@ -195,6 +195,37 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+.toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-label input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* Hide icon frames + collapse gaps when icons are disabled */
+body.icons-disabled .item-icon-frame {
+  display: none;
+}
+
+body.icons-disabled .node-line {
+  gap: 0;
+}
+
+body.icons-disabled .material-name-cell {
+  gap: 0;
+}
+
 /* Inventory hints row */
 .inventory-header {
   display: flex;
@@ -335,25 +366,147 @@ h2 {
 }
 
 .tree ul {
+  list-style: none;
   margin: 0;
-  padding-left: 20px;
+  padding: 0;
 }
 
 .tree li {
-  margin: 8px 0;
+  position: relative;
+  margin: 0;
+}
+
+/* Nested list: indented.
+   padding-left must be >= connector width (26px) so ::before/::after
+   stay inside the padding box and are not clipped by overflow:hidden. */
+.tree ul ul {
+  margin-left: 24px;
+  padding-left: 28px;
+  margin-top: 4px;
+}
+
+/* L-shaped elbow for every child */
+.tree ul ul > li::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -26px;
+  width: 26px;
+  height: 27px;
+  border-left: 2px solid #a8b8f1;
+  border-bottom: 2px solid #a8b8f1;
+  border-bottom-left-radius: 5px;
+  box-sizing: border-box;
+}
+
+/* Extend vertical bar downward only for non-last children */
+.tree ul ul > li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 27px;
+  left: -26px;
+  width: 2px;
+  bottom: 0;
+  background: #a8b8f1;
+}
+
+.item-icon-frame {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #b8c4f2 0%, #cdd5f8 100%);
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  padding: 3px;
+  box-shadow: inset 0 1px 2px rgba(118, 138, 226, 0.15);
+}
+
+.item-icon {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.node-toggle {
+  margin-left: auto;
+  padding: 0 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.65rem;
+  color: var(--line);
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color 120ms;
+}
+
+.node-toggle:hover {
+  color: var(--accent);
+}
+
+/* Children list — animates via max-height trick */
+.node-children {
+  overflow: hidden;
+  max-height: 9999px;
+  transition: max-height 250ms ease, opacity 200ms ease;
+  opacity: 1;
+}
+
+.node-children--collapsed {
+  max-height: 0 !important;
+  opacity: 0;
 }
 
 .node-line {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 7px 10px;
   border-radius: 4px;
   border: 1px solid #a8b8f1;
   background: #ffffff;
 }
 
+/* Base materials: dashed border + muted background */
+.node-line--base {
+  background: #f5f7ff;
+  border-color: var(--line-soft);
+  border-style: dashed;
+  color: var(--ink-soft);
+}
+
+.material-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .node-meta {
   color: var(--ink-soft);
   font-size: 0.9rem;
+}
+
+.skill-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #dde5ff;
+  border: 1px solid #b0bef7;
+  color: #2e3f9e;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.node-line--base .skill-badge {
+  background: #eef0fa;
+  border-color: var(--line-soft);
+  color: var(--ink-soft);
 }
 
 .table-wrap {
@@ -378,6 +531,20 @@ td {
 th {
   background: #e9eeff;
   color: #1c2750;
+}
+
+tr.row-missing {
+  background: #fff5f5;
+}
+
+tr.row-missing td:last-child {
+  font-weight: 600;
+  color: #b8412d;
+}
+
+tr.row-missing td:last-child::before {
+  content: "⚠ ";
+  font-size: 0.78rem;
 }
 
 .notes {

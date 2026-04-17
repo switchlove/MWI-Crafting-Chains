@@ -21,6 +21,7 @@ const elements = {
   itemNameOptions: document.getElementById("itemNameOptions"),
   itemHrid: document.getElementById("itemHrid"),
   quantity: document.getElementById("quantity"),
+  recipeStrategy: document.getElementById("recipeStrategy"),
   inventoryJson: document.getElementById("inventoryJson"),
   calculateBtn: document.getElementById("calculateBtn"),
   exampleBtn: document.getElementById("exampleBtn"),
@@ -377,31 +378,126 @@ function renderTree(node) {
   elements.tree.appendChild(rootList);
 }
 
+function makeItemIcon(itemHrid) {
+  const iconId = itemHrid.replace("/items/", "");
+  const frame = document.createElement("span");
+  frame.className = "item-icon-frame";
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.classList.add("item-icon");
+  svg.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  use.setAttribute("href", `#${iconId}`);
+  svg.appendChild(use);
+  frame.appendChild(svg);
+  return frame;
+}
+
 function renderTreeNode(node) {
   const li = document.createElement("li");
   const line = document.createElement("div");
-  line.className = "node-line";
+  line.className = node.isBaseMaterial ? "node-line node-line--base" : "node-line";
 
   const title = `${node.itemName} x${node.quantityRequested}`;
-  const meta = node.isBaseMaterial
-    ? "base material"
-    : `via ${node.action.name} (${node.action.hrid}) x${node.craftsNeeded}`;
+  let meta;
+  if (node.isBaseMaterial) {
+    meta = "base material";
+  } else {
+    const skillHrid = node.action.levelRequirement?.skillHrid;
+    const skillName = skillHrid
+      ? (state.skillMap.get(skillHrid)?.name ?? skillHrid.split("/").pop().replace(/_/g, " "))
+      : node.action.hrid.split("/")[2]?.replace(/_/g, " ");
+    const capitalised = skillName
+      ? skillName.charAt(0).toUpperCase() + skillName.slice(1)
+      : "Unknown";
+    meta = `via ${capitalised} \u2192 ${node.action.name} x${node.craftsNeeded}`;
+  }
 
-  line.textContent = title;
+  line.appendChild(makeItemIcon(node.itemHrid));
+  line.appendChild(document.createTextNode(title));
+
+  if (!node.isBaseMaterial && node.action?.levelRequirement) {
+    const req = node.action.levelRequirement;
+    const skillName = state.skillMap.get(req.skillHrid)?.name
+      ?? req.skillHrid.split("/").pop().replace(/_/g, " ");
+    const badge = document.createElement("span");
+    badge.className = "skill-badge";
+    badge.title = skillName;
+    badge.textContent = `${skillName} ${req.level}`;
+    line.appendChild(badge);
+  }
+
   const metaSpan = document.createElement("span");
   metaSpan.className = "node-meta";
   metaSpan.textContent = ` - ${meta}`;
   line.appendChild(metaSpan);
 
-  li.appendChild(line);
-
   if (node.children.length > 0) {
+    const chevron = document.createElement("button");
+    chevron.className = "node-toggle";
+    chevron.setAttribute("aria-label", "Toggle subtree");
+    chevron.textContent = "▼";
+    line.appendChild(chevron);
+
     const childList = document.createElement("ul");
+    childList.className = "node-children";
     node.children.forEach((child) => childList.appendChild(renderTreeNode(child)));
+
+    chevron.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const collapsed = childList.classList.toggle("node-children--collapsed");
+      chevron.textContent = collapsed ? "▶" : "▼";
+      chevron.classList.toggle("node-toggle--collapsed", collapsed);
+    });
+
+    li.appendChild(line);
     li.appendChild(childList);
+  } else {
+    li.appendChild(line);
   }
 
   return li;
+}
+
+function renderMaterialsTable(target, materialRows) {
+  if (materialRows.length === 0) {
+    target.innerHTML = "<p>No data</p>";
+    return;
+  }
+
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const trHead = document.createElement("tr");
+
+  ["Material", "HRID", "Need", "Have", "Missing"].forEach((h) => {
+    const th = document.createElement("th");
+    th.textContent = h;
+    trHead.appendChild(th);
+  });
+  thead.appendChild(trHead);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  materialRows.forEach((row) => {
+    const tr = document.createElement("tr");    if (row.missing > 0) tr.classList.add("row-missing");
+    // Icon + name cell
+    const tdName = document.createElement("td");
+    tdName.classList.add("material-name-cell");
+    tdName.appendChild(makeItemIcon(row.hrid));
+    tdName.appendChild(document.createTextNode(row.name));
+    tr.appendChild(tdName);
+
+    [row.hrid, row.need, row.have, row.missing].forEach((value) => {
+      const td = document.createElement("td");
+      td.textContent = String(value);
+      tr.appendChild(td);
+    });
+
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody);
+  target.innerHTML = "";
+  target.appendChild(table);
 }
 
 function renderTable(target, headers, rows) {
@@ -610,7 +706,7 @@ function calculate() {
   const name = elements.itemName.value.trim();
   const hrid = elements.itemHrid.value.trim();
   const quantity = Number(elements.quantity.value || "1");
-  const strategy = DEFAULT_RECIPE_STRATEGY;
+  const strategy = elements.recipeStrategy.value || DEFAULT_RECIPE_STRATEGY;
 
   if (!Number.isFinite(quantity) || quantity <= 0) {
     setStatus("Quantity must be a positive number.", true);
@@ -662,11 +758,7 @@ function calculate() {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([skillHrid, level]) => [state.skillMap.get(skillHrid)?.name || skillHrid, level]);
 
-    renderTable(
-      elements.materials,
-      ["Material", "HRID", "Need", "Have", "Missing"],
-      materialRows.map((row) => [row.name, row.hrid, row.need, row.have, row.missing]),
-    );
+    renderMaterialsTable(elements.materials, materialRows);
     renderTable(elements.skills, ["Skill", "Min Level"], skillRows);
 
     elements.statTime.textContent = formatDuration(tree.totalTimeSeconds);
