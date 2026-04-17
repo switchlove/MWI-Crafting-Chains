@@ -4,6 +4,8 @@ Crafting chain calculator for Milky Way Idle.
 
 This CLI builds full crafting dependency trees, totals base materials, and shows required skill levels.
 
+There is also a browser GUI for GitHub Pages in `docs/`.
+
 Repository: [switchlove/MWI-Crafting-Chains](https://github.com/switchlove/MWI-Crafting-Chains)
 
 ## Setup
@@ -97,3 +99,34 @@ Example `inventory.json`:
 - If multiple recipes can create an item, the first recipe by sort order is selected.
 - Time estimate is the sum of action base times for the whole tree.
 - If a name does not match exactly, the CLI prints close item-name suggestions.
+
+## GitHub Pages GUI
+
+The web UI lives in:
+
+- `docs/index.html`
+- `docs/styles.css`
+- `docs/app.js`
+
+### Enable Pages
+
+1. Go to repository Settings.
+2. Open Pages.
+3. Under Build and deployment, set Source to Deploy from a branch.
+4. Select branch `main` and folder `/docs`.
+5. Save.
+
+GitHub will publish the site at:
+
+- `https://switchlove.github.io/MWI-Crafting-Chains/`
+
+### GUI Features
+
+- Loads MWI data JSON from URL or local file upload
+- Builds and renders full crafting dependency trees
+- Shows base material totals and skill requirements
+- Displays estimated total crafting time
+
+By default, the GUI loads data from:
+
+- `https://raw.githubusercontent.com/switchlove/MWI-Data/main/init_client_data.json`

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MWI Crafting Chains</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg-orb bg-orb-a"></div>
+    <div class="bg-orb bg-orb-b"></div>
+
+    <main class="page">
+      <section class="hero">
+        <p class="eyebrow">Milky Way Idle Planner</p>
+        <h1>Crafting Chain Studio</h1>
+        <p class="hero-copy">
+          Build full recipe trees, calculate base materials, and estimate total crafting time in your browser.
+        </p>
+      </section>
+
+      <section class="panel controls-panel reveal">
+        <div class="controls-grid">
+          <label>
+            <span>Data source URL</span>
+            <input id="dataUrl" type="text" />
+          </label>
+          <label>
+            <span>Or upload data file</span>
+            <input id="dataFile" type="file" accept="application/json" />
+          </label>
+        </div>
+        <div class="controls-actions">
+          <button id="loadDataBtn" class="btn btn-secondary">Load Data</button>
+          <span id="dataStatus" class="status">No data loaded yet.</span>
+        </div>
+      </section>
+
+      <section class="panel controls-panel reveal">
+        <div class="controls-grid">
+          <label>
+            <span>Item name</span>
+            <input id="itemName" type="text" placeholder="Basic Food Crate" />
+          </label>
+          <label>
+            <span>Or item HRID</span>
+            <input id="itemHrid" type="text" placeholder="/items/basic_food_crate" />
+          </label>
+          <label>
+            <span>Quantity</span>
+            <input id="quantity" type="number" min="1" value="1" />
+          </label>
+        </div>
+        <div class="controls-actions">
+          <button id="calculateBtn" class="btn btn-primary">Calculate Chain</button>
+          <button id="exampleBtn" class="btn btn-secondary">Load Example</button>
+        </div>
+      </section>
+
+      <section class="panel stats reveal">
+        <article>
+          <p class="stat-label">Estimated Total Time</p>
+          <p id="statTime" class="stat-value">-</p>
+        </article>
+        <article>
+          <p class="stat-label">Base Materials</p>
+          <p id="statBase" class="stat-value">-</p>
+        </article>
+        <article>
+          <p class="stat-label">Skills Required</p>
+          <p id="statSkills" class="stat-value">-</p>
+        </article>
+      </section>
+
+      <section class="panel reveal">
+        <h2>Crafting Tree</h2>
+        <div id="tree" class="tree"></div>
+      </section>
+
+      <section class="panel reveal">
+        <h2>Base Materials</h2>
+        <div id="materials" class="table-wrap"></div>
+      </section>
+
+      <section class="panel reveal">
+        <h2>Skill Requirements</h2>
+        <div id="skills" class="table-wrap"></div>
+      </section>
+
+      <section class="panel reveal">
+        <h2>Notes</h2>
+        <ul class="notes">
+          <li>Only production actions are treated as recipes.</li>
+          <li>When multiple recipes output the same item, the first by sort index is selected.</li>
+          <li>Time estimate is a sum of all action base times in the tree.</li>
+        </ul>
+      </section>
+    </main>
+
+    <template id="treeNodeTemplate">
+      <li>
+        <div class="node-line"></div>
+        <ul class="node-children"></ul>
+      </li>
+    </template>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
