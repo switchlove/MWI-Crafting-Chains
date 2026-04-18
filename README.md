@@ -14,6 +14,16 @@ Repository: [switchlove/MWI-Crafting-Chains](https://github.com/switchlove/MWI-C
 npm install
 ```
 
+Run the local docs site for development:
+
+```bash
+npm run dev
+```
+
+This serves the app from `docs/` at:
+
+- `http://localhost:4173`
+
 ## Data Source
 
 The calculator loads game data in this order:
@@ -114,6 +124,12 @@ The web UI lives in:
 - `docs/index.html`
 - `docs/styles.css`
 - `docs/app.js`
+
+For local development, run:
+
+```bash
+npm run dev
+```
 
 ### Enable Pages
 

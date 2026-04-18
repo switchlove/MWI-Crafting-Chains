@@ -77,26 +77,318 @@
       </section>
 
       <section class="panel controls-panel reveal">
-        <div class="inventory-header">
-          <span class="inventory-title">Inventory <span class="label-hint">(optional — shows Have / Missing on base materials)</span></span>
+        <div class="user-data-panel-header">
+          <span class="user-data-panel-title">Player Data</span>
           <a class="inventory-userscript-link" href="https://raw.githubusercontent.com/switchlove/MWI-Crafting-Chains/main/userscripts/mwi-crafting-chains-toolasha.user.js" target="_blank" rel="noopener" title="Install the Tampermonkey companion script to auto-load your MWI inventory here">
             Install Toolasha Bridge userscript ↗
           </a>
         </div>
-        <textarea
-          id="inventoryJson"
-          rows="6"
-          placeholder="Accepts any of these formats:
+        <div class="user-data-layout">
+          <section class="user-data-card user-data-card-inventory">
+            <div class="user-data-card-header">
+              <div>
+                <span class="inventory-title">Inventory</span>
+                <p class="user-data-copy">Paste bag contents or pull them in from Toolasha to compare Have vs Missing materials.</p>
+              </div>
+              <button type="button" class="section-toggle-btn" data-collapse-target="playerInventoryBody" aria-expanded="true">Collapse</button>
+            </div>
+            <div id="playerInventoryBody" class="collapsible-body">
+              <textarea
+                id="inventoryJson"
+                rows="7"
+                placeholder="Accepts any of these formats:
 
 • Item Name: qty   →   Sugar: 100
 • HRID map         →   { &quot;/items/sugar&quot;: 100 }
 
-With the Toolasha Bridge userscript installed, a Load button appears here automatically."
-        ></textarea>
-        <div class="inventory-hints">
-          <span class="hint-chip">Sugar: 100</span>
-          <span class="hint-chip">{ &quot;/items/hrid&quot;: qty }</span>
-          <span class="hint-chip">Toolasha JSON paste</span>
+With the Toolasha Bridge userscript installed, the top-right button becomes a Load button automatically."
+              ></textarea>
+              <div class="inventory-hints">
+                <span class="hint-chip">Sugar: 100</span>
+                <span class="hint-chip">{ &quot;/items/hrid&quot;: qty }</span>
+              </div>
+            </div>
+          </section>
+
+          <div class="user-data-stack">
+            <section class="user-data-card">
+              <div class="user-data-card-header">
+                <div>
+                  <span class="inventory-title">Skill Levels</span>
+                </div>
+                <div class="user-data-header-actions">
+                  <button type="button" class="section-toggle-btn" data-collapse-target="playerSkillsBody" aria-expanded="true">Collapse</button>
+                </div>
+              </div>
+              <div id="playerSkillsBody" class="collapsible-body">
+                <div class="user-data-field-grid">
+                <label class="user-data-field">
+                  <span>Milking</span>
+                  <input type="number" min="1" placeholder="1" data-skill-hrid="/skills/milking" />
+                </label>
+                <label class="user-data-field">
+                  <span>Foraging</span>
+                  <input type="number" min="1" placeholder="1" data-skill-hrid="/skills/foraging" />
+                </label>
+                <label class="user-data-field">
+                  <span>Woodcutting</span>
+                  <input type="number" min="1" placeholder="1" data-skill-hrid="/skills/woodcutting" />
+                </label>
+                <label class="user-data-field">
+                  <span>Cheesesmithing</span>
+                  <input type="number" min="1" placeholder="1" data-skill-hrid="/skills/cheesesmithing" />
+                </label>
+                <label class="user-data-field">
+                  <span>Crafting</span>
+                  <input type="number" min="1" placeholder="1" data-skill-hrid="/skills/crafting" />
+                </label>
+                <label class="user-data-field">
+                  <span>Tailoring</span>
+                  <input type="number" min="1" placeholder="1" data-skill-hrid="/skills/tailoring" />
+                </label>
+                <label class="user-data-field">
+                  <span>Cooking</span>
+                  <input type="number" min="1" placeholder="1" data-skill-hrid="/skills/cooking" />
+                </label>
+                <label class="user-data-field">
+                  <span>Brewing</span>
+                  <input type="number" min="1" placeholder="1" data-skill-hrid="/skills/brewing" />
+                </label>
+                <label class="user-data-field">
+                  <span>Alchemy</span>
+                  <input type="number" min="1" placeholder="1" data-skill-hrid="/skills/alchemy" />
+                </label>
+                <label class="user-data-field">
+                  <span>Enhancing</span>
+                  <input type="number" min="1" placeholder="1" data-skill-hrid="/skills/enhancing" />
+                </label>
+                </div>
+              </div>
+            </section>
+
+            <section class="user-data-card">
+              <div class="user-data-card-header">
+                <div>
+                  <span class="inventory-title">Houses</span>
+                </div>
+                <div class="user-data-header-actions">
+                  <button type="button" class="section-toggle-btn" data-collapse-target="playerHousesBody" aria-expanded="true">Collapse</button>
+                </div>
+              </div>
+              <div id="playerHousesBody" class="collapsible-body">
+                <div class="user-data-field-grid">
+                <label class="user-data-field">
+                  <span>Dairy Barn</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/dairy_barn" />
+                </label>
+                <label class="user-data-field">
+                  <span>Garden</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/garden" />
+                </label>
+                <label class="user-data-field">
+                  <span>Log Shed</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/log_shed" />
+                </label>
+                <label class="user-data-field">
+                  <span>Forge</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/forge" />
+                </label>
+                <label class="user-data-field">
+                  <span>Workshop</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/workshop" />
+                </label>
+                <label class="user-data-field">
+                  <span>Sewing Parlor</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/sewing_parlor" />
+                </label>
+                <label class="user-data-field">
+                  <span>Kitchen</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/kitchen" />
+                </label>
+                <label class="user-data-field">
+                  <span>Brewery</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/brewery" />
+                </label>
+                <label class="user-data-field">
+                  <span>Laboratory</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/laboratory" />
+                </label>
+                <label class="user-data-field">
+                  <span>Observatory</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/observatory" />
+                </label>
+                <label class="user-data-field">
+                  <span>Dining Room</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/dining_room" />
+                </label>
+                <label class="user-data-field">
+                  <span>Library</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/library" />
+                </label>
+                <label class="user-data-field">
+                  <span>Dojo</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/dojo" />
+                </label>
+                <label class="user-data-field">
+                  <span>Armory</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/armory" />
+                </label>
+                <label class="user-data-field">
+                  <span>Gym</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/gym" />
+                </label>
+                <label class="user-data-field">
+                  <span>Archery Range</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/archery_range" />
+                </label>
+                <label class="user-data-field">
+                  <span>Mystical Study</span>
+                  <input type="number" min="1" placeholder="1" data-house-hrid="/houses/mystical_study" />
+                </label>
+                </div>
+              </div>
+            </section>
+
+            <section class="user-data-card">
+              <div class="user-data-card-header">
+                <div>
+                  <span class="inventory-title">Gear Loadout</span>
+                </div>
+                <div class="user-data-header-actions">
+                  <button type="button" class="section-toggle-btn" data-collapse-target="playerGearBody" aria-expanded="true">Collapse</button>
+                </div>
+              </div>
+              <div id="playerGearBody" class="collapsible-body">
+                <div class="gear-split-layout">
+                <section class="gear-split-column">
+                  <p class="user-data-subtitle">Gear</p>
+                  <div class="user-data-field-grid user-data-field-grid-gear">
+                    <label class="user-data-field">
+                      <span>Head</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="head" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Necklace</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="necklace" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Earrings</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="earrings" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Body</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="body" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Legs</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="legs" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Feet</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="feet" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Hands</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="hands" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Ring</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="ring" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Main Hand</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="main-hand" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Off Hand</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="off-hand" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Pouch</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="pouch" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Back</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="back" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Charm</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="charm" />
+                    </label>
+                  </div>
+                </section>
+                <section class="gear-split-column gear-split-column-skill-items">
+                  <p class="user-data-subtitle">Skill Items</p>
+                  <div class="user-data-field-grid user-data-field-grid-gear">
+                    <label class="user-data-field">
+                      <span>Brush</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="brush" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Shears</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="shears" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Hatchet</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="hatchet" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Hammer</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="hammer" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Chisel</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="chisel" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Spatula</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="spatula" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Pot</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="pot" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Alembic</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="alembic" />
+                    </label>
+                    <label class="user-data-field">
+                      <span>Enhancer</span>
+                      <input type="text" placeholder="Item name" data-gear-slot="enhancer" />
+                    </label>
+                  </div>
+                </section>
+                </div>
+              </div>
+            </section>
+
+            <section class="user-data-card">
+              <div class="user-data-card-header">
+                <div>
+                  <span class="inventory-title">Drinks</span>
+                </div>
+                <div class="user-data-header-actions">
+                  <button type="button" class="section-toggle-btn" data-collapse-target="playerDrinksBody" aria-expanded="true">Collapse</button>
+                </div>
+              </div>
+              <div id="playerDrinksBody" class="collapsible-body">
+                <div class="user-data-field-grid">
+                  <label class="user-data-field">
+                    <span>Drink 1</span>
+                    <input type="text" placeholder="Tea name" data-drink-slot="1" list="drink-options" />
+                  </label>
+                  <label class="user-data-field">
+                    <span>Drink 2</span>
+                    <input type="text" placeholder="Tea name" data-drink-slot="2" list="drink-options" />
+                  </label>
+                  <label class="user-data-field">
+                    <span>Drink 3</span>
+                    <input type="text" placeholder="Tea name" data-drink-slot="3" list="drink-options" />
+                  </label>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
       </section>
 
@@ -106,6 +398,10 @@ With the Toolasha Bridge userscript installed, a Load button appears here automa
           <p id="statTime" class="stat-value">-</p>
         </article>
         <article>
+          <p class="stat-label">Total Actions</p>
+          <p id="statActions" class="stat-value">-</p>
+        </article>
+        <article>
           <p class="stat-label">Base Materials</p>
           <p id="statBase" class="stat-value">-</p>
         </article>
@@ -113,6 +409,11 @@ With the Toolasha Bridge userscript installed, a Load button appears here automa
           <p class="stat-label">Skills Required</p>
           <p id="statSkills" class="stat-value">-</p>
         </article>
+      </section>
+
+      <section class="panel bonuses-panel reveal">
+        <p class="stat-label">Bonuses Applied</p>
+        <div id="statBonuses" class="stat-bonuses-grid">-</div>
       </section>
 
       <section class="panel reveal">
@@ -126,7 +427,10 @@ With the Toolasha Bridge userscript installed, a Load button appears here automa
       </section>
 
       <section class="panel reveal">
-        <h2>Base Materials</h2>
+        <div class="panel-header-row">
+          <h2>Base Materials</h2>
+          <button id="copyMaterialsBtn" class="btn btn-secondary btn-sm" disabled title="Copy base materials list to clipboard">Copy</button>
+        </div>
         <div id="materials" class="table-wrap"></div>
       </section>
 
@@ -134,6 +438,13 @@ With the Toolasha Bridge userscript installed, a Load button appears here automa
         <div class="controls-actions">
           <button id="exportJsonBtn" class="btn btn-secondary" disabled>Export Results JSON</button>
           <button id="exportCsvBtn" class="btn btn-secondary" disabled>Export Results CSV</button>
+          <div class="session-actions">
+            <button id="exportSessionBtn" class="btn btn-secondary" title="Download all Player Data as a JSON file">Export Session</button>
+            <label class="btn btn-secondary" title="Load a previously exported session JSON">
+              Import Session
+              <input id="importSessionFile" type="file" accept="application/json" style="display:none" />
+            </label>
+          </div>
         </div>
       </section>
 
@@ -142,12 +453,13 @@ With the Toolasha Bridge userscript installed, a Load button appears here automa
         <ul class="notes">
           <li>Only production actions are treated as recipes.</li>
           <li>If multiple recipes output the same item, the default recipe order is used.</li>
-          <li>Time estimate is a sum of all action base times in the tree.</li>
+          <li>Time estimate sums action times in the tree and applies matching house efficiency/action-speed bonuses.</li>
         </ul>
       </section>
     </main>
 
     <datalist id="itemNameOptions"></datalist>
+    <datalist id="drink-options"></datalist>
 
     <template id="treeNodeTemplate">
       <li>

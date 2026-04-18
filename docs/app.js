@@ -1,14 +1,43 @@
 const DEFAULT_DATA_URL =
   "https://raw.githubusercontent.com/switchlove/MWI-Data/main/init_client_data.json";
 const DEFAULT_RECIPE_STRATEGY = "sort-index";
+const GEAR_SLOT_TO_EQUIPMENT_TYPES = {
+  "head": ["/equipment_types/head"],
+  "necklace": ["/equipment_types/neck", "/equipment_types/trinket"],
+  "earrings": ["/equipment_types/earrings"],
+  "body": ["/equipment_types/body"],
+  "legs": ["/equipment_types/legs"],
+  "feet": ["/equipment_types/feet"],
+  "hands": ["/equipment_types/hands"],
+  "ring": ["/equipment_types/ring"],
+  "main-hand": [
+    "/equipment_types/main_hand",
+    "/equipment_types/two_hand",
+  ],
+  "off-hand": ["/equipment_types/off_hand"],
+  "pouch": ["/equipment_types/pouch"],
+  "back": ["/equipment_types/back"],
+  "charm": ["/equipment_types/charm"],
+  "brush": ["/equipment_types/milking_tool"],
+  "shears": ["/equipment_types/foraging_tool"],
+  "hatchet": ["/equipment_types/woodcutting_tool"],
+  "hammer": ["/equipment_types/cheesesmithing_tool"],
+  "chisel": ["/equipment_types/crafting_tool"],
+  "spatula": ["/equipment_types/cooking_tool"],
+  "pot": ["/equipment_types/brewing_tool"],
+  "alembic": ["/equipment_types/alchemy_tool"],
+  "enhancer": ["/equipment_types/enhancing_tool"],
+};
 
 const state = {
   itemDetailMap: null,
   skillDetailMap: null,
   actionDetailMap: null,
+  houseRoomDetailMap: null,
   actionByOutput: new Map(),
   itemMap: new Map(),
   skillMap: new Map(),
+  houseRoomMap: new Map(),
   lastResult: null,
 };
 
@@ -27,12 +56,17 @@ const elements = {
   exampleBtn: document.getElementById("exampleBtn"),
   exportJsonBtn: document.getElementById("exportJsonBtn"),
   exportCsvBtn: document.getElementById("exportCsvBtn"),
+  copyMaterialsBtn: document.getElementById("copyMaterialsBtn"),
+  exportSessionBtn: document.getElementById("exportSessionBtn"),
+  importSessionFile: document.getElementById("importSessionFile"),
   tree: document.getElementById("tree"),
   materials: document.getElementById("materials"),
   skills: document.getElementById("skills"),
   statTime: document.getElementById("statTime"),
+  statActions: document.getElementById("statActions"),
   statBase: document.getElementById("statBase"),
   statSkills: document.getElementById("statSkills"),
+  statBonuses: document.getElementById("statBonuses"),
 };
 
 elements.dataUrl.value = DEFAULT_DATA_URL;
@@ -112,6 +146,201 @@ function buildActionLookup(actions) {
   return map;
 }
 
+function getHouseActionTimeBonus(action, userHouseLevels) {
+  if (!action || !userHouseLevels || userHouseLevels.size === 0 || state.houseRoomMap.size === 0) {
+    return 0;
+  }
+
+  let totalBonus = 0;
+  const actionType = action.type;
+
+  userHouseLevels.forEach((level, houseHrid) => {
+    if (!Number.isFinite(level) || level <= 0 || typeof houseHrid !== "string") return;
+
+    const roomHrid = houseHrid.replace("/houses/", "/house_rooms/");
+    const room = state.houseRoomMap.get(roomHrid);
+    if (!room) return;
+
+    const usable = room.usableInActionTypeMap;
+    if (!usable || typeof usable !== "object" || !usable[actionType]) return;
+
+    const actionBuffs = Array.isArray(room.actionBuffs) ? room.actionBuffs : [];
+    actionBuffs.forEach((buff) => {
+      if (!buff || typeof buff !== "object") return;
+      const buffType = buff.typeHrid;
+      if (buffType !== "/buff_types/efficiency" && buffType !== "/buff_types/action_speed") return;
+
+      const lvl = Math.max(1, Math.floor(level));
+      const perLevel = lvl - 1;
+      const flat = Number(buff.flatBoost || 0) + Number(buff.flatBoostLevelBonus || 0) * perLevel;
+      const ratio = Number(buff.ratioBoost || 0) + Number(buff.ratioBoostLevelBonus || 0) * perLevel;
+      totalBonus += (Number.isFinite(flat) ? flat : 0) + (Number.isFinite(ratio) ? ratio : 0);
+    });
+  });
+
+  return Math.max(0, totalBonus);
+}
+
+function getUserGearStats() {
+  const stats = new Map();
+  if (!state.itemMap.size) return stats;
+  document.querySelectorAll("input[data-gear-slot]").forEach((el) => {
+    if (!el.value) return;
+    const hrid = findItemByName(state.itemMap, el.value);
+    if (!hrid) return;
+    const item = state.itemMap.get(hrid);
+    const ncs = item?.equipmentDetail?.noncombatStats;
+    if (!ncs) return;
+    Object.entries(ncs).forEach(([k, v]) => {
+      if (Number.isFinite(v) && v !== 0) {
+        stats.set(k, (stats.get(k) || 0) + v);
+      }
+    });
+  });
+  return stats;
+}
+
+function getGearActionTimeBonus(action, gearStats) {
+  if (!action || !gearStats || gearStats.size === 0) return 0;
+  const segment = action.type?.split("/").pop();
+  if (!segment) return 0;
+  const speed = gearStats.get(segment + "Speed") || 0;
+  const skillingSpeed = gearStats.get("skillingSpeed") || 0;
+  return Math.max(0, speed + skillingSpeed);
+}
+
+function getUserDrinkBonuses() {
+  const bonuses = new Map(); // actionTypeHrid -> total bonus
+  if (!state.itemMap.size) return bonuses;
+  document.querySelectorAll("input[data-drink-slot]").forEach((el) => {
+    if (!el.value) return;
+    const hrid = findItemByName(state.itemMap, el.value);
+    if (!hrid) return;
+    const item = state.itemMap.get(hrid);
+    const cd = item?.consumableDetail;
+    if (!cd) return;
+    const buffs = Array.isArray(cd.buffs) ? cd.buffs : [];
+    const relevant = buffs.filter(
+      (b) => b.typeHrid === "/buff_types/efficiency" || b.typeHrid === "/buff_types/action_speed",
+    );
+    if (relevant.length === 0) return;
+    let total = 0;
+    relevant.forEach((buff) => { total += Number(buff.flatBoost || 0) + Number(buff.ratioBoost || 0); });
+    if (total <= 0) return;
+    const actionTypes = cd.usableInActionTypeMap ? Object.keys(cd.usableInActionTypeMap) : [];
+    actionTypes.forEach((t) => { bonuses.set(t, (bonuses.get(t) || 0) + total); });
+  });
+  return bonuses;
+}
+
+function getDrinkActionTimeBonus(action, drinkBonuses) {
+  if (!action || !drinkBonuses || drinkBonuses.size === 0) return 0;
+  return Math.max(0, drinkBonuses.get(action.type) || 0);
+}
+
+function populateDrinkOptions(itemMap) {
+  const datalist = document.getElementById("drink-options");
+  if (!datalist) return;
+  const drinks = [];
+  itemMap.forEach((item) => {
+    const cd = item?.consumableDetail;
+    if (!cd) return;
+    const buffs = Array.isArray(cd.buffs) ? cd.buffs : [];
+    const hasRelevant = buffs.some(
+      (b) => b.typeHrid === "/buff_types/efficiency" || b.typeHrid === "/buff_types/action_speed",
+    );
+    if (hasRelevant) drinks.push(item.name);
+  });
+  drinks.sort();
+  datalist.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  drinks.forEach((name) => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    frag.appendChild(opt);
+  });
+  datalist.appendChild(frag);
+}
+
+function collectBonusLines(userHouseLevels, userGearStats, userDrinkBonuses, chainActionTypes) {
+  const lines = [];
+
+  // Gear speed bonuses — only stats relevant to action types in this chain
+  document.querySelectorAll("input[data-gear-slot]").forEach((el) => {
+    if (!el.value) return;
+    const hrid = findItemByName(state.itemMap, el.value);
+    if (!hrid) return;
+    const item = state.itemMap.get(hrid);
+    const ncs = item?.equipmentDetail?.noncombatStats;
+    if (!ncs) return;
+    Object.entries(ncs)
+      .filter(([k, v]) => {
+        if (!k.endsWith("Speed") || !Number.isFinite(v) || v <= 0) return false;
+        if (k === "skillingSpeed") return chainActionTypes.size > 0;
+        const actionType = "/action_types/" + k.slice(0, -5); // strip "Speed"
+        return chainActionTypes.has(actionType);
+      })
+      .forEach(([k, v]) => {
+        const label = k.replace("Speed", "").replace(/([A-Z])/g, " $1").trim().toLowerCase();
+        lines.push(`${item.name}: +${Math.round(v * 1000) / 10}% ${label} speed`);
+      });
+  });
+
+  // House bonuses — only rooms applicable to action types in this chain
+  userHouseLevels.forEach((level, houseHrid) => {
+    if (!Number.isFinite(level) || level <= 0) return;
+    const roomHrid = houseHrid.replace("/houses/", "/house_rooms/");
+    const room = state.houseRoomMap.get(roomHrid);
+    if (!room) return;
+    const usable = room.usableInActionTypeMap;
+    const appliesToChain = usable && typeof usable === "object"
+      && [...chainActionTypes].some((t) => usable[t]);
+    if (!appliesToChain) return;
+    const actionBuffs = Array.isArray(room.actionBuffs) ? room.actionBuffs : [];
+    const relevant = actionBuffs.filter(
+      (b) => b.typeHrid === "/buff_types/efficiency" || b.typeHrid === "/buff_types/action_speed",
+    );
+    if (relevant.length === 0) return;
+    const lvl = Math.max(1, Math.floor(level));
+    const perLevel = lvl - 1;
+    let total = 0;
+    relevant.forEach((buff) => {
+      const flat = Number(buff.flatBoost || 0) + Number(buff.flatBoostLevelBonus || 0) * perLevel;
+      const ratio = Number(buff.ratioBoost || 0) + Number(buff.ratioBoostLevelBonus || 0) * perLevel;
+      total += flat + ratio;
+    });
+    if (total > 0) {
+      const name = room.name || roomHrid.split("/").pop().replace(/_/g, " ");
+      lines.push(`${name} Lv ${level}: +${Math.round(total * 1000) / 10}% speed`);
+    }
+  });
+
+  // Drink bonuses — only drinks applicable to action types in this chain
+  document.querySelectorAll("input[data-drink-slot]").forEach((el) => {
+    if (!el.value) return;
+    const hrid = findItemByName(state.itemMap, el.value);
+    if (!hrid) return;
+    const item = state.itemMap.get(hrid);
+    const cd = item?.consumableDetail;
+    if (!cd) return;
+    const actionTypes = cd.usableInActionTypeMap ? Object.keys(cd.usableInActionTypeMap) : [];
+    const appliesToChain = actionTypes.some((t) => chainActionTypes.has(t));
+    if (!appliesToChain) return;
+    const buffs = Array.isArray(cd.buffs) ? cd.buffs : [];
+    const relevant = buffs.filter(
+      (b) => b.typeHrid === "/buff_types/efficiency" || b.typeHrid === "/buff_types/action_speed",
+    );
+    if (relevant.length === 0) return;
+    let total = 0;
+    relevant.forEach((buff) => { total += Number(buff.flatBoost || 0) + Number(buff.ratioBoost || 0); });
+    if (total > 0) {
+      lines.push(`${item.name}: +${Math.round(total * 1000) / 10}% speed`);
+    }
+  });
+
+  return lines;
+}
+
 function findItemByName(itemMap, query) {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return undefined;
@@ -173,6 +402,64 @@ function populateItemAutocomplete(itemMap) {
 
   elements.itemNameOptions.innerHTML = "";
   elements.itemNameOptions.appendChild(fragment);
+}
+
+function getOrCreateGearDatalist(slotKey) {
+  const listId = `gear-options-${slotKey}`;
+  let datalist = document.getElementById(listId);
+  if (!datalist) {
+    datalist = document.createElement("datalist");
+    datalist.id = listId;
+    document.body.appendChild(datalist);
+  }
+  return datalist;
+}
+
+function populateGearOptions(itemMap) {
+  const gearInputs = Array.from(document.querySelectorAll("input[data-gear-slot]"));
+  if (gearInputs.length === 0) return;
+
+  const itemsByType = new Map();
+  itemMap.forEach((item) => {
+    const type = item?.equipmentDetail?.type;
+    if (!type) return;
+
+    if (!itemsByType.has(type)) {
+      itemsByType.set(type, []);
+    }
+    itemsByType.get(type).push(item);
+  });
+
+  gearInputs.forEach((input) => {
+    const slotKey = input.dataset.gearSlot || "";
+    const equipmentTypes = GEAR_SLOT_TO_EQUIPMENT_TYPES[slotKey] || [];
+    const matches = [];
+
+    equipmentTypes.forEach((type) => {
+      const items = itemsByType.get(type) || [];
+      items.forEach((item) => matches.push(item));
+    });
+
+    matches.sort((a, b) => a.name.localeCompare(b.name));
+
+    const datalist = getOrCreateGearDatalist(slotKey);
+    datalist.innerHTML = "";
+
+    const seen = new Set();
+    const fragment = document.createDocumentFragment();
+    matches.forEach((item) => {
+      if (seen.has(item.hrid)) return;
+      seen.add(item.hrid);
+
+      const option = document.createElement("option");
+      option.value = item.name;
+      option.label = item.hrid;
+      fragment.appendChild(option);
+    });
+
+    datalist.appendChild(fragment);
+    input.setAttribute("list", datalist.id);
+  });
 }
 
 /**
@@ -285,7 +572,7 @@ function parseInventoryInput(rawText) {
   return { inventory, error };
 }
 
-function buildCraftTree(itemHrid, quantity, strategy, path = new Set()) {
+function buildCraftTree(itemHrid, quantity, strategy, userHouseLevels, userGearStats, userDrinkBonuses, path = new Set()) {
   if (path.has(itemHrid)) {
     throw new Error(`Circular dependency detected at ${itemHrid}`);
   }
@@ -317,14 +604,17 @@ function buildCraftTree(itemHrid, quantity, strategy, path = new Set()) {
   const children = [];
 
   if (action.upgradeItemHrid) {
-    children.push(buildCraftTree(action.upgradeItemHrid, craftsNeeded, strategy, nextPath));
+    children.push(buildCraftTree(action.upgradeItemHrid, craftsNeeded, strategy, userHouseLevels, userGearStats, userDrinkBonuses, nextPath));
   }
 
   (action.inputItems || []).forEach((input) => {
-    children.push(buildCraftTree(input.itemHrid, input.count * craftsNeeded, strategy, nextPath));
+    children.push(buildCraftTree(input.itemHrid, input.count * craftsNeeded, strategy, userHouseLevels, userGearStats, userDrinkBonuses, nextPath));
   });
 
-  const ownTime = ((action.baseTimeCost || 0) / 1000000000) * craftsNeeded;
+  const houseBonus = getHouseActionTimeBonus(action, userHouseLevels);
+  const gearBonus = getGearActionTimeBonus(action, userGearStats);
+  const drinkBonus = getDrinkActionTimeBonus(action, userDrinkBonuses);
+  const ownTime = ((action.baseTimeCost || 0) / 1000000000) * craftsNeeded / (1 + houseBonus + gearBonus + drinkBonus);
   const childTime = children.reduce((sum, child) => sum + child.totalTimeSeconds, 0);
 
   return {
@@ -338,6 +628,11 @@ function buildCraftTree(itemHrid, quantity, strategy, path = new Set()) {
     children,
     totalTimeSeconds: ownTime + childTime,
   };
+}
+
+function collectTotalActions(node) {
+  if (node.isBaseMaterial) return 0;
+  return node.craftsNeeded + node.children.reduce((sum, child) => sum + collectTotalActions(child), 0);
 }
 
 function collectBaseMaterials(node, totals = new Map()) {
@@ -371,10 +666,46 @@ function collectAlternativeRecipeItems(node, out = new Set()) {
   return out;
 }
 
-function renderTree(node) {
+function collectActionTypes(node, out = new Set()) {
+  if (!node.isBaseMaterial && node.action?.type) {
+    out.add(node.action.type);
+  }
+  node.children.forEach((child) => collectActionTypes(child, out));
+  return out;
+}
+
+function getUserSkillLevels() {
+  const levels = new Map();
+  const inputs = document.querySelectorAll("input[data-skill-hrid]");
+
+  inputs.forEach((input) => {
+    const skillHrid = input.dataset.skillHrid;
+    const value = Number(input.value);
+    if (!skillHrid || !Number.isFinite(value) || value <= 0) return;
+    levels.set(skillHrid, Math.floor(value));
+  });
+
+  return levels;
+}
+
+function getUserHouseLevels() {
+  const levels = new Map();
+  const inputs = document.querySelectorAll("input[data-house-hrid]");
+
+  inputs.forEach((input) => {
+    const houseHrid = input.dataset.houseHrid;
+    const value = Number(input.value);
+    if (!houseHrid || !Number.isFinite(value) || value <= 0) return;
+    levels.set(houseHrid, Math.floor(value));
+  });
+
+  return levels;
+}
+
+function renderTree(node, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses) {
   elements.tree.innerHTML = "";
   const rootList = document.createElement("ul");
-  rootList.appendChild(renderTreeNode(node));
+  rootList.appendChild(renderTreeNode(node, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses));
   elements.tree.appendChild(rootList);
 }
 
@@ -392,7 +723,7 @@ function makeItemIcon(itemHrid) {
   return frame;
 }
 
-function renderTreeNode(node) {
+function renderTreeNode(node, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses) {
   const li = document.createElement("li");
   const line = document.createElement("div");
   line.className = node.isBaseMaterial ? "node-line node-line--base" : "node-line";
@@ -410,6 +741,13 @@ function renderTreeNode(node) {
       ? skillName.charAt(0).toUpperCase() + skillName.slice(1)
       : "Unknown";
     meta = `via ${capitalised} \u2192 ${node.action.name} x${node.craftsNeeded}`;
+    const houseBonus = getHouseActionTimeBonus(node.action, userHouseLevels);
+    const gearBonus = getGearActionTimeBonus(node.action, userGearStats);
+    const drinkBonus = getDrinkActionTimeBonus(node.action, userDrinkBonuses);
+    const perCraftSeconds = ((node.action.baseTimeCost || 0) / 1e9) / (1 + houseBonus + gearBonus + drinkBonus);
+    if (perCraftSeconds > 0) {
+      meta += ` \u00b7 ${formatDuration(perCraftSeconds)}/craft`;
+    }
   }
 
   line.appendChild(makeItemIcon(node.itemHrid));
@@ -419,10 +757,20 @@ function renderTreeNode(node) {
     const req = node.action.levelRequirement;
     const skillName = state.skillMap.get(req.skillHrid)?.name
       ?? req.skillHrid.split("/").pop().replace(/_/g, " ");
+    const userLevel = userSkillLevels.get(req.skillHrid);
+    const hasUserLevel = Number.isFinite(userLevel);
+    const meetsReq = hasUserLevel && userLevel >= req.level;
+
     const badge = document.createElement("span");
     badge.className = "skill-badge";
+    if (hasUserLevel) {
+      badge.classList.add(meetsReq ? "skill-badge--met" : "skill-badge--missing");
+    }
     badge.title = skillName;
     badge.textContent = `${skillName} ${req.level}`;
+    if (hasUserLevel) {
+      badge.title = `${skillName}: need ${req.level}, have ${userLevel}`;
+    }
     line.appendChild(badge);
   }
 
@@ -440,7 +788,7 @@ function renderTreeNode(node) {
 
     const childList = document.createElement("ul");
     childList.className = "node-children";
-    node.children.forEach((child) => childList.appendChild(renderTreeNode(child)));
+    node.children.forEach((child) => childList.appendChild(renderTreeNode(child, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses)));
 
     chevron.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -456,6 +804,66 @@ function renderTreeNode(node) {
   }
 
   return li;
+}
+
+function renderSkillsTable(target, skillRows) {
+  if (skillRows.length === 0) {
+    target.innerHTML = "<p>No data</p>";
+    return;
+  }
+
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const trHead = document.createElement("tr");
+
+  ["Skill", "Min Level", "Your Level", "Status"].forEach((h) => {
+    const th = document.createElement("th");
+    th.textContent = h;
+    trHead.appendChild(th);
+  });
+
+  thead.appendChild(trHead);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  skillRows.forEach((row) => {
+    const tr = document.createElement("tr");
+    if (row.hasLevel) {
+      tr.classList.add(row.meets ? "row-skill-met" : "row-skill-missing");
+    }
+
+    const tdSkill = document.createElement("td");
+    tdSkill.textContent = row.skill;
+    tr.appendChild(tdSkill);
+
+    const tdRequired = document.createElement("td");
+    tdRequired.textContent = String(row.minLevel);
+    tr.appendChild(tdRequired);
+
+    const tdHave = document.createElement("td");
+    tdHave.textContent = row.hasLevel ? String(row.userLevel) : "-";
+    tr.appendChild(tdHave);
+
+    const tdStatus = document.createElement("td");
+    tdStatus.className = "skill-status-cell";
+    if (!row.hasLevel) {
+      tdStatus.textContent = "-";
+      tdStatus.classList.add("skill-status-cell--unknown");
+    } else if (row.meets) {
+      tdStatus.textContent = "✓";
+      tdStatus.classList.add("skill-status-cell--ok");
+    } else {
+      tdStatus.textContent = "✗";
+      tdStatus.classList.add("skill-status-cell--bad");
+    }
+    tr.appendChild(tdStatus);
+
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody);
+  target.innerHTML = "";
+  target.appendChild(table);
 }
 
 function renderMaterialsTable(target, materialRows) {
@@ -538,6 +946,20 @@ function renderTable(target, headers, rows) {
 function setExportEnabled(enabled) {
   elements.exportJsonBtn.disabled = !enabled;
   elements.exportCsvBtn.disabled = !enabled;
+  elements.copyMaterialsBtn.disabled = !enabled;
+}
+
+function copyMaterialsToClipboard() {
+  if (!state.lastResult) return;
+  const lines = state.lastResult.materialRows
+    .map((row) => `${row.need}x ${row.name}`)
+    .join("\n");
+  navigator.clipboard.writeText(lines).then(() => {
+    const btn = elements.copyMaterialsBtn;
+    const prev = btn.textContent;
+    btn.textContent = "Copied!";
+    setTimeout(() => { btn.textContent = prev; }, 1500);
+  });
 }
 
 function slugifyForFilename(text) {
@@ -682,15 +1104,19 @@ async function loadData() {
     state.itemDetailMap = data.itemDetailMap;
     state.skillDetailMap = data.skillDetailMap;
     state.actionDetailMap = data.actionDetailMap;
+    state.houseRoomDetailMap = data.houseRoomDetailMap || {};
     state.itemMap = new Map(Object.entries(data.itemDetailMap));
     state.skillMap = new Map(Object.entries(data.skillDetailMap));
+    state.houseRoomMap = new Map(Object.entries(state.houseRoomDetailMap));
     state.actionByOutput = buildActionLookup(data.actionDetailMap);
     state.lastResult = null;
     setExportEnabled(false);
     populateItemAutocomplete(state.itemMap);
+    populateGearOptions(state.itemMap);
+    populateDrinkOptions(state.itemMap);
 
     setStatus(
-      `Loaded ${Object.keys(state.itemDetailMap).length} items, ${Object.keys(state.skillDetailMap).length} skills, and ${Object.keys(state.actionDetailMap).length} actions.`,
+      `Loaded ${Object.keys(state.itemDetailMap).length} items, ${Object.keys(state.skillDetailMap).length} skills, ${Object.keys(state.actionDetailMap).length} actions, and ${Object.keys(state.houseRoomDetailMap).length} house rooms.`,
     );
   } catch (error) {
     setStatus(error.message, true);
@@ -732,13 +1158,18 @@ function calculate() {
       return;
     }
 
-    const tree = buildCraftTree(itemHrid, quantity, strategy);
+    const userHouseLevels = getUserHouseLevels();
+    const userGearStats = getUserGearStats();
+    const userDrinkBonuses = getUserDrinkBonuses();
+    const tree = buildCraftTree(itemHrid, quantity, strategy, userHouseLevels, userGearStats, userDrinkBonuses);
     const materials = collectBaseMaterials(tree);
     const skills = collectSkills(tree);
+    const totalActions = collectTotalActions(tree);
     const alternativeItems = collectAlternativeRecipeItems(tree);
     const inventory = parsedInventory.inventory;
+    const userSkillLevels = getUserSkillLevels();
 
-    renderTree(tree);
+    renderTree(tree, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses);
 
     const materialRows = Array.from(materials.entries())
       .map(([materialHrid, count]) => {
@@ -756,14 +1187,38 @@ function calculate() {
 
     const skillRows = Array.from(skills.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([skillHrid, level]) => [state.skillMap.get(skillHrid)?.name || skillHrid, level]);
+      .map(([skillHrid, level]) => {
+        const userLevel = userSkillLevels.get(skillHrid);
+        const hasLevel = Number.isFinite(userLevel);
+        return {
+          skillHrid,
+          skill: state.skillMap.get(skillHrid)?.name || skillHrid,
+          minLevel: level,
+          userLevel: hasLevel ? userLevel : null,
+          hasLevel,
+          meets: hasLevel ? userLevel >= level : false,
+        };
+      });
 
     renderMaterialsTable(elements.materials, materialRows);
-    renderTable(elements.skills, ["Skill", "Min Level"], skillRows);
+    renderSkillsTable(elements.skills, skillRows);
 
     elements.statTime.textContent = formatDuration(tree.totalTimeSeconds);
+    elements.statActions.textContent = String(totalActions);
     elements.statBase.textContent = String(materialRows.length);
     elements.statSkills.textContent = String(skillRows.length);
+
+    const bonusLines = collectBonusLines(userHouseLevels, userGearStats, userDrinkBonuses, collectActionTypes(tree));
+    elements.statBonuses.innerHTML = "";
+    if (bonusLines.length === 0) {
+      elements.statBonuses.textContent = "None";
+    } else {
+      bonusLines.forEach((line) => {
+        const span = document.createElement("span");
+        span.textContent = line;
+        elements.statBonuses.appendChild(span);
+      });
+    }
 
     state.lastResult = {
       target: {
@@ -779,7 +1234,7 @@ function calculate() {
       },
       tree,
       materialRows,
-      skillRows: skillRows.map(([skill, minLevel]) => ({ skill, minLevel })),
+      skillRows: skillRows.map((row) => ({ skill: row.skill, minLevel: row.minLevel })),
     };
     setExportEnabled(true);
 
@@ -813,12 +1268,170 @@ function loadExample() {
   ].join("\n");
 }
 
+function initializeUserDataCollapsibles() {
+  const STORAGE_PREFIX = "mwi_section_collapsed_";
+  const toggles = document.querySelectorAll(".section-toggle-btn[data-collapse-target]");
+
+  toggles.forEach((toggle) => {
+    const targetId = toggle.dataset.collapseTarget;
+    if (!targetId) return;
+
+    const body = document.getElementById(targetId);
+    if (!body) return;
+
+    const storageKey = STORAGE_PREFIX + targetId;
+
+    const setExpanded = (expanded, persist = true) => {
+      body.hidden = !expanded;
+      toggle.setAttribute("aria-expanded", String(expanded));
+      toggle.textContent = expanded ? "Collapse" : "Expand";
+      if (persist) {
+        try { localStorage.setItem(storageKey, expanded ? "1" : "0"); } catch { /* storage unavailable */ }
+      }
+    };
+
+    // Restore saved state; fall back to default (expanded)
+    let savedExpanded = true;
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved === "0") savedExpanded = false;
+    } catch { /* storage unavailable */ }
+
+    setExpanded(savedExpanded, false);
+
+    toggle.addEventListener("click", () => {
+      const expanded = toggle.getAttribute("aria-expanded") === "true";
+      setExpanded(!expanded);
+    });
+  });
+}
+
 elements.loadDataBtn.addEventListener("click", loadData);
 elements.calculateBtn.addEventListener("click", calculate);
+elements.itemName.addEventListener("keydown", (e) => { if (e.key === "Enter") calculate(); });
+elements.quantity.addEventListener("keydown", (e) => { if (e.key === "Enter") calculate(); });
 elements.exampleBtn.addEventListener("click", loadExample);
 elements.exportJsonBtn.addEventListener("click", exportJson);
 elements.exportCsvBtn.addEventListener("click", exportCsv);
+elements.copyMaterialsBtn.addEventListener("click", copyMaterialsToClipboard);
+elements.exportSessionBtn.addEventListener("click", exportSession);
+elements.importSessionFile.addEventListener("change", (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      restoreSession(data);
+    } catch {
+      alert("Invalid session file.");
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+});
 
+// ── Session: auto-save on input ──────────────────────────────────────
+const SESSION_KEY = "mwi_crafting_session";
+
+function captureSession() {
+  const skills = {};
+  document.querySelectorAll("input[data-skill-hrid]").forEach((el) => {
+    if (el.value) skills[el.dataset.skillHrid] = el.value;
+  });
+  const houses = {};
+  document.querySelectorAll("input[data-house-hrid]").forEach((el) => {
+    if (el.value) houses[el.dataset.houseHrid] = el.value;
+  });
+  const gear = {};
+  document.querySelectorAll("input[data-gear-slot]").forEach((el) => {
+    if (el.value) gear[el.dataset.gearSlot] = el.value;
+  });
+  const drinks = {};
+  document.querySelectorAll("input[data-drink-slot]").forEach((el) => {
+    if (el.value) drinks[el.dataset.drinkSlot] = el.value;
+  });
+  return {
+    version: 1,
+    itemName: elements.itemName.value,
+    itemHrid: elements.itemHrid.value,
+    quantity: elements.quantity.value,
+    recipeStrategy: elements.recipeStrategy.value,
+    inventory: elements.inventoryJson.value,
+    skills,
+    houses,
+    gear,
+    drinks,
+  };
+}
+
+function restoreSession(data) {
+  if (!data || typeof data !== "object") return;
+  if (data.itemName !== undefined) elements.itemName.value = data.itemName;
+  if (data.itemHrid !== undefined) elements.itemHrid.value = data.itemHrid;
+  if (data.quantity !== undefined) elements.quantity.value = data.quantity;
+  if (data.recipeStrategy !== undefined) elements.recipeStrategy.value = data.recipeStrategy;
+  if (data.inventory !== undefined) {
+    elements.inventoryJson.value = data.inventory;
+    elements.inventoryJson.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  if (data.skills && typeof data.skills === "object") {
+    document.querySelectorAll("input[data-skill-hrid]").forEach((el) => {
+      const v = data.skills[el.dataset.skillHrid];
+      if (v !== undefined) el.value = v;
+    });
+  }
+  if (data.houses && typeof data.houses === "object") {
+    document.querySelectorAll("input[data-house-hrid]").forEach((el) => {
+      const v = data.houses[el.dataset.houseHrid];
+      if (v !== undefined) el.value = v;
+    });
+  }
+  if (data.gear && typeof data.gear === "object") {
+    document.querySelectorAll("input[data-gear-slot]").forEach((el) => {
+      const v = data.gear[el.dataset.gearSlot];
+      if (v !== undefined) el.value = v;
+    });
+  }
+  if (data.drinks && typeof data.drinks === "object") {
+    document.querySelectorAll("input[data-drink-slot]").forEach((el) => {
+      const v = data.drinks[el.dataset.drinkSlot];
+      if (v !== undefined) el.value = v;
+    });
+  }
+}
+
+function saveSession() {
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(captureSession())); } catch { /* quota exceeded */ }
+}
+
+function exportSession() {
+  const data = captureSession();
+  const name = data.itemName || data.itemHrid || "session";
+  const slug = name.replace(/[^\w-]/g, "_").toLowerCase();
+  downloadTextFile(`mwi-session-${slug}.json`, JSON.stringify(data, null, 2), "application/json");
+}
+
+// Auto-save on any player-data input change (debounced)
+let _saveTimer = null;
+function debouncedSave() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(saveSession, 400);
+}
+[
+  elements.itemName, elements.itemHrid, elements.quantity,
+  elements.recipeStrategy, elements.inventoryJson,
+].forEach((el) => el.addEventListener("input", debouncedSave));
+document.querySelectorAll("input[data-skill-hrid], input[data-house-hrid], input[data-gear-slot], input[data-drink-slot]")
+  .forEach((el) => el.addEventListener("input", debouncedSave));
+
+// Restore saved session on load
+try {
+  const raw = localStorage.getItem(SESSION_KEY);
+  if (raw) restoreSession(JSON.parse(raw));
+} catch { /* ignore */ }
+
+initializeUserDataCollapsibles();
 setExportEnabled(false);
 
 loadData();

@@ -4,6 +4,7 @@
   "description": "Milky Way Idle crafting chain calculator",
   "scripts": {
     "calc": "tsx src/crafting-chain.ts",
+    "dev": "serve docs -l 4173",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],
@@ -15,6 +16,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "serve": "^14.2.6",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }

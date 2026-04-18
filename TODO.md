@@ -18,22 +18,35 @@
 
 ---
 
-### User Data Section (combine Inventory + Skills + Gear)
-Merge the current Inventory panel and new Skills/Gear inputs into a single **"Your Character"** (or "User Data") collapsible panel.
+### Efficiency Bonuses
+- [ ] Apply `noncombatStats.*Efficiency` (e.g. `brewingEfficiency`) and `skillingEfficiency` from gear to reduce expected `craftsNeeded` — efficiency gives a chance at bonus output, effectively multiplying output count by `(1 + efficiency)`
+- [ ] Show efficiency bonuses in "Bonuses Applied" panel alongside speed bonuses
 
-#### Inventory (existing, moved here)
-- [ ] Move current inventory textarea into the unified User Data section
-- [ ] Retain Toolasha bridge "Load" button and hint chips
+---
 
-#### Skill Levels
-- [ ] Add manual skill level inputs (one per skill, numeric)
-- [ ] Add bridge support: extend Toolasha userscript to also pull `characterSkills` and store via `GM_setValue`
-- [ ] Add a "Load from Toolasha" button in the skills sub-section (mirrors inventory bridge UX)
-- [ ] Skill level indicator in **Skill Requirements table**: green check / red X per row based on user's level vs. required level
-- [ ] Skill badge in **Crafting Tree nodes**: colour badge green if user meets the level, red if not (grey/default when no user data)
+### Recipe Pinning
+- [ ] When an item has multiple recipe options, allow the user to manually pin a specific recipe for that item (overrides the global sort strategy for that node)
+- [ ] Persist pinned recipes in the session
 
-#### Gear Selection
-- [ ] Add a gear sub-section listing relevant equipment slots (tool, outfit, etc.)
-- [ ] Populate gear options from `itemDetailMap` filtered to equipment items
-- [ ] Store selected gear in state alongside inventory/skills
-- [ ] (Future) Use selected gear to adjust time estimates or unlock alternative recipes
+---
+
+## Completed ✓
+
+- [x] Inventory import (multi-format: JSON HRID map, characterItems array, friendly name lines)
+- [x] Skill Levels import via bridge
+- [x] Gear Loadout import via bridge
+- [x] House Levels import via bridge (v1.6.4 — fixed Map extraction + `/house_rooms/` → `/houses/` normalisation)
+- [x] Collapsible Player Data sections (Inventory, Skill Levels, Houses, Gear Loadout)
+- [x] Skill indicators (green ✓ / red ✗) in crafting tree badges and Skill Requirements table
+- [x] Centered Skill Requirements table columns
+- [x] 3-column layout for Skill Levels and Houses
+- [x] Session save/restore: auto-save all Player Data + item inputs to `localStorage`; Export Session (→ `.json` download) and Import Session (← file picker)
+- [x] Add Map-aware extraction to `extractCharacterSkills` and `extractCharacterEquipment` in case Toolasha switches those to Maps too 
+- [x] Apply house room action bonuses to craft-time calculations (efficiency/action_speed, filtered by action type)
+- [x] Use selected skill tool items (`noncombatStats.*Speed` + `skillingSpeed`) to adjust time estimates; shown in tree as `(tool: +X% speed)`
+- [x] Use selected gear (`noncombatStats.*Speed`) to adjust time estimates; bonuses listed in "Bonuses Applied" panel, filtered to chain action types
+- [x] Press Enter in the item name field (or quantity field) to trigger Calculate
+- [x] Add "Total Actions" stat (sum of all `craftsNeeded` across crafted nodes) alongside Estimated Total Time
+- [x] Show per-craft action time in each crafting tree node (e.g. `12s each`)
+- [x] Let user specify active drinks (from `itemDetailMap` drink items) to factor their speed/efficiency bonuses into time estimates
+- [x] Copy base materials list to clipboard as plain text
