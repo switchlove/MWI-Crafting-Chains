@@ -11,10 +11,10 @@
 ---
 
 ### Flat Crafting Order Panel
-- [ ] Add a collapsible "Step-by-Step" section below the crafting tree
-- [ ] Resolve dependency order (topological sort — leaves first)
-- [ ] List each unique crafted item once with total crafts needed
-- [ ] Make the panel useful for in-game execution without reading the tree
+- [x] Add a collapsible "Step-by-Step" section below the crafting tree
+- [x] Resolve dependency order (topological sort — leaves first)
+- [x] List each unique crafted item once with total crafts needed
+- [x] Make the panel useful for in-game execution without reading the tree
 
 ---
 

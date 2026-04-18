@@ -57,6 +57,8 @@ const elements = {
   exportJsonBtn: document.getElementById("exportJsonBtn"),
   exportCsvBtn: document.getElementById("exportCsvBtn"),
   copyMaterialsBtn: document.getElementById("copyMaterialsBtn"),
+  craftOrder: document.getElementById("craft-order"),
+  craftOrderEmpty: document.getElementById("craftOrderEmpty"),
   exportSessionBtn: document.getElementById("exportSessionBtn"),
   importSessionFile: document.getElementById("importSessionFile"),
   tree: document.getElementById("tree"),
@@ -674,6 +676,95 @@ function collectActionTypes(node, out = new Set()) {
   return out;
 }
 
+/**
+ * Topological sort of crafted nodes — leaves first, root last.
+ * Deduplicates by itemHrid and sums craftsNeeded across all occurrences.
+ * Returns an array in dependency order (safe to execute top-to-bottom in-game).
+ */
+function collectCraftingOrder(node) {
+  const seen = new Map(); // itemHrid -> { itemHrid, itemName, craftsNeeded, action, order }
+  let counter = 0;
+
+  function visit(n) {
+    n.children.forEach(visit);
+    if (n.isBaseMaterial) return;
+    if (seen.has(n.itemHrid)) {
+      seen.get(n.itemHrid).craftsNeeded += n.craftsNeeded;
+    } else {
+      seen.set(n.itemHrid, {
+        itemHrid: n.itemHrid,
+        itemName: n.itemName,
+        craftsNeeded: n.craftsNeeded,
+        action: n.action,
+        order: counter++,
+      });
+    }
+  }
+
+  visit(node);
+  return Array.from(seen.values()).sort((a, b) => a.order - b.order);
+}
+
+function renderCraftingOrder(target, emptyEl, steps, userSkillLevels) {
+  target.innerHTML = "";
+
+  if (steps.length === 0) {
+    emptyEl.hidden = false;
+    return;
+  }
+
+  emptyEl.hidden = true;
+
+  steps.forEach((step) => {
+    const li = document.createElement("li");
+    li.className = "craft-order-step";
+
+    li.appendChild(makeItemIcon(step.itemHrid));
+
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = step.itemName;
+    li.appendChild(nameSpan);
+
+    const countSpan = document.createElement("span");
+    countSpan.className = "node-meta";
+    countSpan.textContent = `×${step.craftsNeeded} craft${step.craftsNeeded !== 1 ? "s" : ""}`;
+    li.appendChild(countSpan);
+
+    if (step.action?.levelRequirement) {
+      const req = step.action.levelRequirement;
+      const skillName = state.skillMap.get(req.skillHrid)?.name
+        ?? req.skillHrid.split("/").pop().replace(/_/g, " ");
+      const userLevel = userSkillLevels.get(req.skillHrid);
+      const hasUserLevel = Number.isFinite(userLevel);
+      const meetsReq = hasUserLevel && userLevel >= req.level;
+      const badge = document.createElement("span");
+      badge.className = "skill-badge";
+      if (hasUserLevel) badge.classList.add(meetsReq ? "skill-badge--met" : "skill-badge--missing");
+      badge.title = hasUserLevel
+        ? `${skillName}: need ${req.level}, have ${userLevel}`
+        : skillName;
+      badge.textContent = `${skillName} ${req.level}`;
+      li.appendChild(badge);
+    }
+
+    if (step.action) {
+      const skillHrid = step.action.levelRequirement?.skillHrid;
+      const skillName = skillHrid
+        ? (state.skillMap.get(skillHrid)?.name ?? skillHrid.split("/").pop().replace(/_/g, " "))
+        : step.action.hrid.split("/")[2]?.replace(/_/g, " ");
+      const capitalised = skillName
+        ? skillName.charAt(0).toUpperCase() + skillName.slice(1)
+        : "Unknown";
+      const viaSpan = document.createElement("span");
+      viaSpan.className = "node-meta";
+      viaSpan.textContent = `· via ${capitalised} \u2192 ${step.action.name}`;
+      li.appendChild(viaSpan);
+    }
+
+    target.appendChild(li);
+  });
+}
+
 function getUserSkillLevels() {
   const levels = new Map();
   const inputs = document.querySelectorAll("input[data-skill-hrid]");
@@ -1170,6 +1261,9 @@ function calculate() {
     const userSkillLevels = getUserSkillLevels();
 
     renderTree(tree, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses);
+
+    const craftingOrder = collectCraftingOrder(tree);
+    renderCraftingOrder(elements.craftOrder, elements.craftOrderEmpty, craftingOrder, userSkillLevels);
 
     const materialRows = Array.from(materials.entries())
       .map(([materialHrid, count]) => {

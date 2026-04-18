@@ -868,6 +868,54 @@ tr.row-skill-missing {
   color: var(--ink-soft);
 }
 
+/* Step-by-step crafting order */
+.craft-order-list {
+  counter-reset: craft-step;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.craft-order-step {
+  counter-increment: craft-step;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 4px;
+  border: 1px solid #a8b8f1;
+  background: #ffffff;
+}
+
+.craft-order-step::before {
+  content: counter(craft-step);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e9eeff;
+  border: 1px solid #b0bef7;
+  color: #2e3f9e;
+  font-size: 0.72rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.craft-order-empty {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+body.icons-disabled .craft-order-step {
+  gap: 0;
+}
+
 @media (max-width: 760px) {
   .page {
     width: min(1100px, 95vw);

@@ -428,6 +428,17 @@ With the Toolasha Bridge userscript installed, the top-right button becomes a Lo
 
       <section class="panel reveal">
         <div class="panel-header-row">
+          <h2>Step-by-Step Crafting Order</h2>
+          <button type="button" class="section-toggle-btn" data-collapse-target="craftOrderBody" aria-expanded="true">Collapse</button>
+        </div>
+        <div id="craftOrderBody">
+          <p class="craft-order-empty" id="craftOrderEmpty">Calculate a chain to see the step-by-step order.</p>
+          <ol id="craft-order" class="craft-order-list"></ol>
+        </div>
+      </section>
+
+      <section class="panel reveal">
+        <div class="panel-header-row">
           <h2>Base Materials</h2>
           <button id="copyMaterialsBtn" class="btn btn-secondary btn-sm" disabled title="Copy base materials list to clipboard">Copy</button>
         </div>
