@@ -39,7 +39,44 @@ const state = {
   skillMap: new Map(),
   houseRoomMap: new Map(),
   lastResult: null,
+  priceCache: new Map(), // key: itemName → { a, b, ts }
 };
+
+const MARKET_JSON = "./data/marketplace.json";
+const PRICE_CACHE_MS = 5 * 60 * 1000; // 5 min TTL before re-fetching the file
+let _marketDataPromise = null;
+let _marketDataTs = 0;
+
+function _toItemKey(name) {
+  return '/items/' + name.toLowerCase()
+    .replace(/'/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+async function _getMarketData() {
+  if (_marketDataPromise && Date.now() - _marketDataTs < PRICE_CACHE_MS) {
+    return _marketDataPromise;
+  }
+  _marketDataTs = Date.now();
+  _marketDataPromise = fetch(MARKET_JSON)
+    .then(res => res.ok ? res.json() : null)
+    .then(json => json?.marketData ?? json)
+    .catch(() => null);
+  return _marketDataPromise;
+}
+
+async function fetchMarketPrice(itemName) {
+  const cached = state.priceCache.get(itemName);
+  if (cached && Date.now() - cached.ts < PRICE_CACHE_MS) return cached;
+  const data = await _getMarketData();
+  if (!data) return null;
+  const tier = data[_toItemKey(itemName)]?.['0'];
+  if (!tier) return null;
+  const entry = { a: tier.a ?? null, b: tier.b ?? null, ts: Date.now() };
+  state.priceCache.set(itemName, entry);
+  return entry;
+}
 
 const elements = {
   dataUrl: document.getElementById("dataUrl"),
@@ -63,6 +100,7 @@ const elements = {
   importSessionFile: document.getElementById("importSessionFile"),
   tree: document.getElementById("tree"),
   materials: document.getElementById("materials"),
+  materialsSummary: document.getElementById("materialsSummary"),
   skills: document.getElementById("skills"),
   statTime: document.getElementById("statTime"),
   statActions: document.getElementById("statActions"),
@@ -211,6 +249,15 @@ function getGearActionTimeBonus(action, gearStats) {
   return Math.max(0, speed + skillingSpeed);
 }
 
+function getGearActionEfficiencyBonus(action, gearStats) {
+  if (!action || !gearStats || gearStats.size === 0) return 0;
+  const segment = action.type?.split("/").pop();
+  if (!segment) return 0;
+  const efficiency = gearStats.get(segment + "Efficiency") || 0;
+  const skillingEfficiency = gearStats.get("skillingEfficiency") || 0;
+  return Math.max(0, efficiency + skillingEfficiency);
+}
+
 function getUserDrinkBonuses() {
   const bonuses = new Map(); // actionTypeHrid -> total bonus
   if (!state.itemMap.size) return bonuses;
@@ -287,6 +334,29 @@ function collectBonusLines(userHouseLevels, userGearStats, userDrinkBonuses, cha
         lines.push(`${item.name}: +${Math.round(v * 1000) / 10}% ${label} speed`);
       });
   });
+
+  // Gear efficiency bonuses — only stats relevant to action types in this chain
+  if (localStorage.getItem('mwi_efficiency_enabled') !== 'false') {
+    document.querySelectorAll("input[data-gear-slot]").forEach((el) => {
+      if (!el.value) return;
+      const hrid = findItemByName(state.itemMap, el.value);
+      if (!hrid) return;
+      const item = state.itemMap.get(hrid);
+      const ncs = item?.equipmentDetail?.noncombatStats;
+      if (!ncs) return;
+      Object.entries(ncs)
+        .filter(([k, v]) => {
+          if (!k.endsWith("Efficiency") || !Number.isFinite(v) || v <= 0) return false;
+          if (k === "skillingEfficiency") return chainActionTypes.size > 0;
+          const actionType = "/action_types/" + k.slice(0, -10); // strip "Efficiency"
+          return chainActionTypes.has(actionType);
+        })
+        .forEach(([k, v]) => {
+          const label = k.replace("Efficiency", "").replace(/([A-Z])/g, " $1").trim().toLowerCase();
+          lines.push(`${item.name}: +${Math.round(v * 1000) / 10}% ${label} efficiency (fewer crafts)`);
+        });
+    });
+  }
 
   // House bonuses — only rooms applicable to action types in this chain
   userHouseLevels.forEach((level, houseHrid) => {
@@ -598,7 +668,9 @@ function buildCraftTree(itemHrid, quantity, strategy, userHouseLevels, userGearS
 
   const action = chooseRecipeForOutput(itemHrid, candidates, strategy);
   const outputCount = getOutputCount(action, itemHrid);
-  const craftsNeeded = Math.ceil(quantity / outputCount);
+  const efficiencyEnabled = localStorage.getItem('mwi_efficiency_enabled') !== 'false';
+  const gearEfficiency = efficiencyEnabled ? getGearActionEfficiencyBonus(action, userGearStats) : 0;
+  const craftsNeeded = Math.ceil(quantity / (outputCount * (1 + gearEfficiency)));
 
   const nextPath = new Set(path);
   nextPath.add(itemHrid);
@@ -793,10 +865,18 @@ function getUserHouseLevels() {
   return levels;
 }
 
-function renderTree(node, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses) {
+function subtreeHasMissing(node, missingMap) {
+  if (node.isBaseMaterial) {
+    const m = missingMap.get(node.itemHrid);
+    return m ? m.missing > 0 : false;
+  }
+  return node.children.some((child) => subtreeHasMissing(child, missingMap));
+}
+
+function renderTree(node, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses, missingMap = null) {
   elements.tree.innerHTML = "";
   const rootList = document.createElement("ul");
-  rootList.appendChild(renderTreeNode(node, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses));
+  rootList.appendChild(renderTreeNode(node, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses, missingMap));
   elements.tree.appendChild(rootList);
 }
 
@@ -814,15 +894,36 @@ function makeItemIcon(itemHrid) {
   return frame;
 }
 
-function renderTreeNode(node, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses) {
+function renderTreeNode(node, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses, missingMap = null) {
   const li = document.createElement("li");
   const line = document.createElement("div");
   line.className = node.isBaseMaterial ? "node-line node-line--base" : "node-line";
 
+  // Material availability highlighting
+  if (missingMap) {
+    if (node.isBaseMaterial) {
+      const m = missingMap.get(node.itemHrid);
+      if (m) {
+        if (m.have === 0) line.classList.add("node-line--have-none");
+        else if (m.missing > 0) line.classList.add("node-line--have-partial");
+        else line.classList.add("node-line--have-all");
+      }
+    } else if (subtreeHasMissing(node, missingMap)) {
+      line.classList.add("node-line--subtree-missing");
+    }
+  }
+
   const title = `${node.itemName} x${node.quantityRequested}`;
   let meta;
   if (node.isBaseMaterial) {
-    meta = "base material";
+    const m = missingMap?.get(node.itemHrid);
+    if (m) {
+      meta = m.missing > 0
+        ? `have ${m.have} · need ${m.need} · short ${m.missing}`
+        : `have ${m.have} · need ${m.need}`;
+    } else {
+      meta = "base material";
+    }
   } else {
     const skillHrid = node.action.levelRequirement?.skillHrid;
     const skillName = skillHrid
@@ -879,7 +980,7 @@ function renderTreeNode(node, userSkillLevels, userHouseLevels, userGearStats, u
 
     const childList = document.createElement("ul");
     childList.className = "node-children";
-    node.children.forEach((child) => childList.appendChild(renderTreeNode(child, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses)));
+    node.children.forEach((child) => childList.appendChild(renderTreeNode(child, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses, missingMap)));
 
     chevron.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -957,6 +1058,53 @@ function renderSkillsTable(target, skillRows) {
   target.appendChild(table);
 }
 
+async function fetchAndPatchPrices(target, materialRows, summaryEl) {
+  const rows = Array.from(target.querySelectorAll("tbody tr[data-item-name]"));
+  if (rows.length === 0) return;
+
+  const fmt = (n) => n == null ? "\u2014" : Number(n).toLocaleString();
+
+  // Fetch all prices in parallel
+  await Promise.all(rows.map(async (tr) => {
+    const name = tr.dataset.itemName;
+    const missing = Number(tr.dataset.missing);
+    const tdUnit = tr.cells[tr.cells.length - 2];
+    const tdTotal = tr.cells[tr.cells.length - 1];
+
+    const price = await fetchMarketPrice(name);
+    const unitPrice = price?.a ?? price?.b ?? null;
+
+    tdUnit.textContent = fmt(unitPrice);
+    tdUnit.className = "price-cell";
+
+    if (unitPrice != null) {
+      const totalCost = Math.ceil(missing) * unitPrice;
+      tdTotal.textContent = missing > 0 ? fmt(totalCost) : "\u2014";
+    } else {
+      tdTotal.textContent = "\u2014";
+    }
+    tdTotal.className = "price-cell";
+  }));
+
+  // Append total missing cost to summary line
+  let totalMissingCost = 0;
+  let pricesAvailable = false;
+  rows.forEach((tr) => {
+    const missing = Number(tr.dataset.missing);
+    const tdUnit = tr.cells[tr.cells.length - 2];
+    const rawPrice = tdUnit.textContent.replace(/,/g, "");
+    const unit = parseFloat(rawPrice);
+    if (!isNaN(unit) && missing > 0) {
+      totalMissingCost += Math.ceil(missing) * unit;
+      pricesAvailable = true;
+    }
+  });
+
+  if (pricesAvailable && summaryEl && !summaryEl.hidden) {
+    summaryEl.textContent += ` \u00b7 Missing cost: ${Math.round(totalMissingCost).toLocaleString()} coins`;
+  }
+}
+
 function renderMaterialsTable(target, materialRows) {
   if (materialRows.length === 0) {
     target.innerHTML = "<p>No data</p>";
@@ -967,7 +1115,7 @@ function renderMaterialsTable(target, materialRows) {
   const thead = document.createElement("thead");
   const trHead = document.createElement("tr");
 
-  ["Material", "HRID", "Need", "Have", "Missing"].forEach((h) => {
+  ["Material", "HRID", "Need", "Have", "Missing", "Unit Price", "Total Cost"].forEach((h) => {
     const th = document.createElement("th");
     th.textContent = h;
     trHead.appendChild(th);
@@ -977,7 +1125,11 @@ function renderMaterialsTable(target, materialRows) {
 
   const tbody = document.createElement("tbody");
   materialRows.forEach((row) => {
-    const tr = document.createElement("tr");    if (row.missing > 0) tr.classList.add("row-missing");
+    const tr = document.createElement("tr");
+    if (row.missing > 0) tr.classList.add("row-missing");
+    tr.dataset.itemName = row.name;
+    tr.dataset.need = row.need;
+    tr.dataset.missing = row.missing;
     // Icon + name cell
     const tdName = document.createElement("td");
     tdName.classList.add("material-name-cell");
@@ -990,6 +1142,18 @@ function renderMaterialsTable(target, materialRows) {
       td.textContent = String(value);
       tr.appendChild(td);
     });
+
+    // Unit price cell
+    const tdUnit = document.createElement("td");
+    tdUnit.className = "price-cell price-cell--loading";
+    tdUnit.textContent = "…";
+    tr.appendChild(tdUnit);
+
+    // Total cost cell
+    const tdTotal = document.createElement("td");
+    tdTotal.className = "price-cell price-cell--loading";
+    tdTotal.textContent = "…";
+    tr.appendChild(tdTotal);
 
     tbody.appendChild(tr);
   });
@@ -1259,8 +1423,14 @@ function calculate() {
     const alternativeItems = collectAlternativeRecipeItems(tree);
     const inventory = parsedInventory.inventory;
     const userSkillLevels = getUserSkillLevels();
+    const missingMap = inventory.size > 0
+      ? new Map(Array.from(materials.entries()).map(([hrid, need]) => {
+          const have = inventory.get(hrid) || 0;
+          return [hrid, { need, have, missing: Math.max(0, need - have) }];
+        }))
+      : null;
 
-    renderTree(tree, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses);
+    renderTree(tree, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses, missingMap);
 
     const craftingOrder = collectCraftingOrder(tree);
     renderCraftingOrder(elements.craftOrder, elements.craftOrderEmpty, craftingOrder, userSkillLevels);
@@ -1296,6 +1466,27 @@ function calculate() {
 
     renderMaterialsTable(elements.materials, materialRows);
     renderSkillsTable(elements.skills, skillRows);
+
+    // Async price fetch — patches table cells in-place after render
+    fetchAndPatchPrices(elements.materials, materialRows, elements.materialsSummary);
+
+    // Materials summary line
+    const hasMissing = materialRows.some((r) => r.missing > 0);
+    const hasInventory = parsedInventory.inventory.size > 0;
+    if (hasInventory) {
+      const missingKindCount = materialRows.filter((r) => r.missing > 0).length;
+      if (missingKindCount === 0) {
+        elements.materialsSummary.textContent = "\u2713 You have all materials";
+        elements.materialsSummary.className = "materials-summary materials-summary--ok";
+      } else {
+        const missingTotal = materialRows.reduce((sum, r) => sum + r.missing, 0);
+        elements.materialsSummary.textContent = `\u2717 Missing ${missingKindCount} kind${missingKindCount > 1 ? "s" : ""} \u00b7 ${Math.round(missingTotal).toLocaleString()} total units`;
+        elements.materialsSummary.className = "materials-summary materials-summary--missing";
+      }
+      elements.materialsSummary.hidden = false;
+    } else {
+      elements.materialsSummary.hidden = true;
+    }
 
     elements.statTime.textContent = formatDuration(tree.totalTimeSeconds);
     elements.statActions.textContent = String(totalActions);
@@ -1351,15 +1542,58 @@ function calculate() {
 }
 
 function loadExample() {
-  elements.itemName.value = "Expert Tea Crate";
-  elements.quantity.value = "3";
+  if (!elements.itemName.value) elements.itemName.value = "Expert Tea Crate";
+  if (!elements.quantity.value) elements.quantity.value = "3";
   elements.itemHrid.value = "";
   // Friendly line format — demonstrates the parser
-  elements.inventoryJson.value = [
-    "Sugar: 100",
-    "Black Tea Leaf: 50",
-    "Coin: 500",
-  ].join("\n");
+  if (!elements.inventoryJson.value) {
+    elements.inventoryJson.value = [
+      "Sugar: 100",
+      "Black Tea Leaf: 50",
+      "Coin: 500",
+    ].join("\n");
+  }
+
+  // Fill in example skill levels — only for empty fields
+  const exampleSkills = {
+    "/skills/brewing": "40",
+    "/skills/crafting": "30",
+    "/skills/alchemy": "20",
+    "/skills/cooking": "20",
+    "/skills/foraging": "25",
+    "/skills/woodcutting": "25",
+  };
+  document.querySelectorAll("input[data-skill-hrid]").forEach((el) => {
+    if (!el.value && exampleSkills[el.dataset.skillHrid]) {
+      el.value = exampleSkills[el.dataset.skillHrid];
+    }
+  });
+
+  // Fill in example house levels — only for empty fields
+  const exampleHouses = {
+    "/houses/brewery": "4",
+    "/houses/workshop": "3",
+    "/houses/kitchen": "3",
+    "/houses/laboratory": "2",
+    "/houses/garden": "3",
+    "/houses/log_shed": "3",
+  };
+  document.querySelectorAll("input[data-house-hrid]").forEach((el) => {
+    if (!el.value && exampleHouses[el.dataset.houseHrid]) {
+      el.value = exampleHouses[el.dataset.houseHrid];
+    }
+  });
+
+  // Fill in example gear — only for empty fields
+  const exampleGear = {
+    "pot": "Burble Pot",
+    "charm": "Basic Brewing Charm",
+  };
+  document.querySelectorAll("input[data-gear-slot]").forEach((el) => {
+    if (!el.value && exampleGear[el.dataset.gearSlot]) {
+      el.value = exampleGear[el.dataset.gearSlot];
+    }
+  });
 }
 
 function initializeUserDataCollapsibles() {
@@ -1405,6 +1639,11 @@ elements.calculateBtn.addEventListener("click", calculate);
 elements.itemName.addEventListener("keydown", (e) => { if (e.key === "Enter") calculate(); });
 elements.quantity.addEventListener("keydown", (e) => { if (e.key === "Enter") calculate(); });
 elements.exampleBtn.addEventListener("click", loadExample);
+document.querySelectorAll(".qty-preset-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    elements.quantity.value = btn.dataset.qty;
+  });
+});
 elements.exportJsonBtn.addEventListener("click", exportJson);
 elements.exportCsvBtn.addEventListener("click", exportCsv);
 elements.copyMaterialsBtn.addEventListener("click", copyMaterialsToClipboard);
@@ -1505,6 +1744,16 @@ function exportSession() {
   const slug = name.replace(/[^\w-]/g, "_").toLowerCase();
   downloadTextFile(`mwi-session-${slug}.json`, JSON.stringify(data, null, 2), "application/json");
 }
+
+// Clear section buttons
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-clear-target]");
+  if (!btn) return;
+  const body = document.getElementById(btn.dataset.clearTarget);
+  if (!body) return;
+  body.querySelectorAll("input, textarea").forEach((el) => { el.value = ""; });
+  debouncedSave();
+});
 
 // Auto-save on any player-data input change (debounced)
 let _saveTimer = null;

@@ -1,0 +1,26 @@
+name: Update Marketplace Data
+
+on:
+  schedule:
+    - cron: '0 */1 * * *'   # every 1 hour
+  workflow_dispatch:          # allow manual trigger from GitHub UI
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch marketplace data
+        run: node tools/price-server.js
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/data/marketplace.json
+          git diff --staged --quiet || git commit -m "chore: update marketplace data [skip ci]"
+          git push

@@ -5,6 +5,7 @@
   "scripts": {
     "calc": "tsx src/crafting-chain.ts",
     "dev": "serve docs -l 4173",
+    "prices": "node tools/price-server.js",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],

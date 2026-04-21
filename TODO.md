@@ -2,25 +2,8 @@
 
 ## Features
 
-### Multi-Item Queue
-- [ ] Allow queuing multiple target items in a single run (e.g. 3x Potion A + 2x Potion B)
-- [ ] Combine base material requirements across all queued items into a single shopping list
-- [ ] Show per-item subtotals alongside the combined total in the materials table
-- [ ] Aggregate skill requirements across all queued items
-
----
-
-### Flat Crafting Order Panel
-- [x] Add a collapsible "Step-by-Step" section below the crafting tree
-- [x] Resolve dependency order (topological sort — leaves first)
-- [x] List each unique crafted item once with total crafts needed
-- [x] Make the panel useful for in-game execution without reading the tree
-
----
-
-### Efficiency Bonuses
-- [ ] Apply `noncombatStats.*Efficiency` (e.g. `brewingEfficiency`) and `skillingEfficiency` from gear to reduce expected `craftsNeeded` — efficiency gives a chance at bonus output, effectively multiplying output count by `(1 + efficiency)`
-- [ ] Show efficiency bonuses in "Bonuses Applied" panel alongside speed bonuses
+### UX / QoL
+- [ ] Shareable URL — encode item name, quantity, and strategy into the URL hash so a link pre-fills the form
 
 ---
 
@@ -30,8 +13,30 @@
 
 ---
 
+### Multi-Item Queue
+- [ ] Allow queuing multiple target items in a single run (e.g. 3x Potion A + 2x Potion B)
+- [ ] Combine base material requirements across all queued items into a single shopping list
+- [ ] Show per-item subtotals alongside the combined total in the materials table
+- [ ] Aggregate skill requirements across all queued items
+
+---
+
+### Time to Gather
+- [ ] Estimate how long gathering missing base materials would take given skill levels and gear (requires action lookup for gathering nodes)
+
+---
+
 ## Completed ✓
 
+- [x] Apply `noncombatStats.*Efficiency` (e.g. `brewingEfficiency`) and `skillingEfficiency` from gear to reduce expected `craftsNeeded` — efficiency gives a chance at bonus output, effectively multiplying output count by `(1 + efficiency)`
+- [x] Show efficiency bonuses in "Bonuses Applied" panel alongside speed bonuses
+- [x] Missing materials highlight in tree — shade nodes red/yellow where base materials are short, so you can see which branches you can't start yet
+- [x] Quantity presets — quick-select buttons (×1, ×10, ×100) next to the quantity field
+- [x] "Have enough" summary line above the materials table (e.g. "✓ You have all materials" or "✗ Missing 3 kinds")
+- [x] Show coin cost of base materials using market price data (if available in game data)
+- [x] Show total estimated gold cost for missing materials
+- [x] Market price flag on correct column (Missing, not Total Cost)
+- [x] Market prices served as static `docs/data/marketplace.json`; auto-refreshed every 6 h via GitHub Actions
 - [x] Inventory import (multi-format: JSON HRID map, characterItems array, friendly name lines)
 - [x] Skill Levels import via bridge
 - [x] Gear Loadout import via bridge
@@ -50,3 +55,8 @@
 - [x] Show per-craft action time in each crafting tree node (e.g. `12s each`)
 - [x] Let user specify active drinks (from `itemDetailMap` drink items) to factor their speed/efficiency bonuses into time estimates
 - [x] Copy base materials list to clipboard as plain text
+- [x] Load Example fills in example skill levels, house levels, and gear without overwriting existing data
+- [x] Clear button on each Player Data section header to wipe that section's inputs
+- [x] Collapsible Crafting Tree, Base Materials, Skill Requirements, and Player Data panels
+- [x] Flat Crafting Order panel (Step-by-Step): topological sort, one row per crafted item with total crafts needed
+

@@ -26,25 +26,47 @@
       </section>
 
       <section class="panel controls-panel reveal">
-        <div class="controls-grid">
-          <label>
-            <span>Data source URL</span>
-            <input id="dataUrl" type="text" />
-          </label>
-          <label>
-            <span>Or upload data file</span>
-            <input id="dataFile" type="file" accept="application/json" />
-          </label>
-        </div>
         <div class="controls-actions">
           <button id="loadDataBtn" class="btn btn-secondary">Load Data</button>
           <span id="dataStatus" class="status">No data loaded yet.</span>
-          <label class="toggle-label" title="Disable to skip loading the icon sprite sheet (~4 MB)">
-            <input type="checkbox" id="iconsToggle" />
-            <span>Show icons</span>
-          </label>
+          <button type="button" class="btn btn-settings" id="settingsBtn" title="Settings">⚙ Settings</button>
         </div>
       </section>
+
+      <!-- Settings modal -->
+      <dialog id="settingsModal" class="settings-modal">
+        <div class="settings-modal-header">
+          <h2 class="settings-modal-title">Settings</h2>
+          <button type="button" class="settings-modal-close" id="settingsModalClose" aria-label="Close settings">✕</button>
+        </div>
+        <div class="settings-modal-body">
+          <section class="settings-section">
+            <h3 class="settings-section-title">Data Source</h3>
+            <label class="settings-field">
+              <span>Data URL</span>
+              <input id="dataUrl" type="text" />
+            </label>
+            <label class="settings-field">
+              <span>Or upload file</span>
+              <input id="dataFile" type="file" accept="application/json" />
+            </label>
+          </section>
+          <section class="settings-section">
+            <h3 class="settings-section-title">Display</h3>
+            <label class="toggle-label" title="Disable to skip loading the icon sprite sheet (~4 MB)">
+              <input type="checkbox" id="iconsToggle" />
+              <span>Show icons</span>
+            </label>
+          </section>
+          <section class="settings-section">
+            <h3 class="settings-section-title">Calculation</h3>
+            <label class="toggle-label" title="Apply gear and skill efficiency bonuses to reduce crafts needed">
+              <input type="checkbox" id="efficiencyToggle" />
+              <span>Apply efficiency bonuses</span>
+            </label>
+          </section>
+        </div>
+      </dialog>
 
       <section class="panel controls-panel reveal">
         <div class="controls-grid">
@@ -56,10 +78,17 @@
             <span>Or item HRID</span>
             <input id="itemHrid" type="text" placeholder="/items/basic_food_crate" />
           </label>
-          <label>
-            <span>Quantity</span>
-            <input id="quantity" type="number" min="1" value="1" />
-          </label>
+          <div class="qty-field-wrap">
+            <label>
+              <span>Quantity</span>
+              <input id="quantity" type="number" min="1" value="1" />
+            </label>
+            <div class="qty-presets">
+              <button type="button" class="qty-preset-btn" data-qty="1">×1</button>
+              <button type="button" class="qty-preset-btn" data-qty="10">×10</button>
+              <button type="button" class="qty-preset-btn" data-qty="100">×100</button>
+            </div>
+          </div>
           <label>
             <span>Recipe strategy</span>
             <select id="recipeStrategy">
@@ -79,18 +108,24 @@
       <section class="panel controls-panel reveal">
         <div class="user-data-panel-header">
           <span class="user-data-panel-title">Player Data</span>
-          <a class="inventory-userscript-link" href="https://raw.githubusercontent.com/switchlove/MWI-Crafting-Chains/main/userscripts/mwi-crafting-chains-toolasha.user.js" target="_blank" rel="noopener" title="Install the Tampermonkey companion script to auto-load your MWI inventory here">
-            Install Toolasha Bridge userscript ↗
-          </a>
+          <div class="user-data-header-actions">
+            <a class="inventory-userscript-link" href="https://raw.githubusercontent.com/switchlove/MWI-Crafting-Chains/main/userscripts/mwi-crafting-chains-toolasha.user.js" target="_blank" rel="noopener" title="Install the Tampermonkey companion script to auto-load your MWI inventory here">
+              Install Toolasha Bridge userscript ↗
+            </a>
+            <button type="button" class="section-toggle-btn" data-collapse-target="playerDataBody" aria-expanded="true">Collapse</button>
+          </div>
         </div>
-        <div class="user-data-layout">
+        <div id="playerDataBody" class="user-data-layout">
           <section class="user-data-card user-data-card-inventory">
             <div class="user-data-card-header">
               <div>
                 <span class="inventory-title">Inventory</span>
                 <p class="user-data-copy">Paste bag contents or pull them in from Toolasha to compare Have vs Missing materials.</p>
               </div>
-              <button type="button" class="section-toggle-btn" data-collapse-target="playerInventoryBody" aria-expanded="true">Collapse</button>
+              <div class="user-data-header-actions">
+                <button type="button" class="btn-clear" data-clear-target="playerInventoryBody">Clear</button>
+                <button type="button" class="section-toggle-btn" data-collapse-target="playerInventoryBody" aria-expanded="true">Collapse</button>
+              </div>
             </div>
             <div id="playerInventoryBody" class="collapsible-body">
               <textarea
@@ -117,6 +152,7 @@ With the Toolasha Bridge userscript installed, the top-right button becomes a Lo
                   <span class="inventory-title">Skill Levels</span>
                 </div>
                 <div class="user-data-header-actions">
+                  <button type="button" class="btn-clear" data-clear-target="playerSkillsBody">Clear</button>
                   <button type="button" class="section-toggle-btn" data-collapse-target="playerSkillsBody" aria-expanded="true">Collapse</button>
                 </div>
               </div>
@@ -172,6 +208,7 @@ With the Toolasha Bridge userscript installed, the top-right button becomes a Lo
                   <span class="inventory-title">Houses</span>
                 </div>
                 <div class="user-data-header-actions">
+                  <button type="button" class="btn-clear" data-clear-target="playerHousesBody">Clear</button>
                   <button type="button" class="section-toggle-btn" data-collapse-target="playerHousesBody" aria-expanded="true">Collapse</button>
                 </div>
               </div>
@@ -255,6 +292,7 @@ With the Toolasha Bridge userscript installed, the top-right button becomes a Lo
                   <span class="inventory-title">Gear Loadout</span>
                 </div>
                 <div class="user-data-header-actions">
+                  <button type="button" class="btn-clear" data-clear-target="playerGearBody">Clear</button>
                   <button type="button" class="section-toggle-btn" data-collapse-target="playerGearBody" aria-expanded="true">Collapse</button>
                 </div>
               </div>
@@ -368,6 +406,7 @@ With the Toolasha Bridge userscript installed, the top-right button becomes a Lo
                   <span class="inventory-title">Drinks</span>
                 </div>
                 <div class="user-data-header-actions">
+                  <button type="button" class="btn-clear" data-clear-target="playerDrinksBody">Clear</button>
                   <button type="button" class="section-toggle-btn" data-collapse-target="playerDrinksBody" aria-expanded="true">Collapse</button>
                 </div>
               </div>
@@ -417,13 +456,23 @@ With the Toolasha Bridge userscript installed, the top-right button becomes a Lo
       </section>
 
       <section class="panel reveal">
-        <h2>Skill Requirements</h2>
-        <div id="skills" class="table-wrap"></div>
+        <div class="panel-header-row">
+          <h2>Skill Requirements</h2>
+          <button type="button" class="section-toggle-btn" data-collapse-target="skillReqsBody" aria-expanded="true">Collapse</button>
+        </div>
+        <div id="skillReqsBody">
+          <div id="skills" class="table-wrap"></div>
+        </div>
       </section>
 
       <section class="panel reveal">
-        <h2>Crafting Tree</h2>
-        <div id="tree" class="tree"></div>
+        <div class="panel-header-row">
+          <h2>Crafting Tree</h2>
+          <button type="button" class="section-toggle-btn" data-collapse-target="craftingTreeBody" aria-expanded="true">Collapse</button>
+        </div>
+        <div id="craftingTreeBody">
+          <div id="tree" class="tree"></div>
+        </div>
       </section>
 
       <section class="panel reveal">
@@ -441,8 +490,12 @@ With the Toolasha Bridge userscript installed, the top-right button becomes a Lo
         <div class="panel-header-row">
           <h2>Base Materials</h2>
           <button id="copyMaterialsBtn" class="btn btn-secondary btn-sm" disabled title="Copy base materials list to clipboard">Copy</button>
+          <button type="button" class="section-toggle-btn" data-collapse-target="baseMaterialsBody" aria-expanded="true">Collapse</button>
         </div>
-        <div id="materials" class="table-wrap"></div>
+        <div id="baseMaterialsBody">
+          <p id="materialsSummary" class="materials-summary" hidden></p>
+          <div id="materials" class="table-wrap"></div>
+        </div>
       </section>
 
       <section class="panel controls-panel reveal">
@@ -482,37 +535,54 @@ With the Toolasha Bridge userscript installed, the top-right button becomes a Lo
     <div id="svg-sprite-container" hidden></div>
     <script>
       (function () {
-        var PREF_KEY = 'mwi_icons_enabled';
-        var stored = localStorage.getItem(PREF_KEY);
-        // Default ON if never set
-        var enabled = stored === null ? true : stored === 'true';
+        // ── Icons pref (applied before DOMContentLoaded to avoid flash) ──
+        var ICONS_KEY = 'mwi_icons_enabled';
+        var iconsOn = localStorage.getItem(ICONS_KEY) !== 'false'; // default ON
 
         function applyIconState(on) {
           document.body.classList.toggle('icons-disabled', !on);
         }
-
         function loadSprite() {
-          var container = document.getElementById('svg-sprite-container');
-          if (container.innerHTML.trim()) return; // already loaded
-          fetch('./items.svg')
-            .then(function(r) { return r.text(); })
-            .then(function(text) { container.innerHTML = text; });
+          var c = document.getElementById('svg-sprite-container');
+          if (c.innerHTML.trim()) return;
+          fetch('./items.svg').then(function(r){return r.text();}).then(function(t){c.innerHTML=t;});
         }
+        applyIconState(iconsOn);
 
-        // Apply immediately so first render is correct
-        applyIconState(enabled);
-
-        // Init toggle once DOM is ready
         document.addEventListener('DOMContentLoaded', function () {
-          var toggle = document.getElementById('iconsToggle');
-          toggle.checked = enabled;
-          if (enabled) loadSprite();
+          var modal     = document.getElementById('settingsModal');
+          var openBtn   = document.getElementById('settingsBtn');
+          var closeBtn  = document.getElementById('settingsModalClose');
 
-          toggle.addEventListener('change', function () {
-            enabled = toggle.checked;
-            localStorage.setItem(PREF_KEY, enabled);
-            applyIconState(enabled);
-            if (enabled) loadSprite();
+          openBtn.addEventListener('click', function () {
+            modal.showModal();
+          });
+          closeBtn.addEventListener('click', function () {
+            modal.close();
+          });
+          // Close on backdrop click
+          modal.addEventListener('click', function (e) {
+            if (e.target === modal) modal.close();
+          });
+          // Close on Escape is handled natively by <dialog>
+
+          // Icons toggle
+          var iconsToggle = document.getElementById('iconsToggle');
+          iconsToggle.checked = iconsOn;
+          if (iconsOn) loadSprite();
+          iconsToggle.addEventListener('change', function () {
+            iconsOn = iconsToggle.checked;
+            localStorage.setItem(ICONS_KEY, iconsOn);
+            applyIconState(iconsOn);
+            if (iconsOn) loadSprite();
+          });
+
+          // Efficiency toggle
+          var EFF_KEY = 'mwi_efficiency_enabled';
+          var effToggle = document.getElementById('efficiencyToggle');
+          effToggle.checked = localStorage.getItem(EFF_KEY) !== 'false'; // default ON
+          effToggle.addEventListener('change', function () {
+            localStorage.setItem(EFF_KEY, effToggle.checked);
           });
         });
       })();
