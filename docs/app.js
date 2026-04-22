@@ -1996,12 +1996,45 @@ function removeFromQueue(index) {
   debouncedSave();
 }
 
+function moveInQueue(index, direction) {
+  const newIndex = index + direction;
+  if (newIndex < 0 || newIndex >= state.queue.length) return;
+  const tmp = state.queue[index];
+  state.queue[index] = state.queue[newIndex];
+  state.queue[newIndex] = tmp;
+  renderQueueList();
+  debouncedSave();
+}
+
 function renderQueueList() {
   elements.queueListWrap.hidden = state.queue.length === 0;
   elements.queueList.innerHTML = "";
   state.queue.forEach((entry, i) => {
     const row = document.createElement("div");
     row.className = "queue-item";
+
+    const reorderBtns = document.createElement("span");
+    reorderBtns.className = "queue-item-reorder";
+
+    const upBtn = document.createElement("button");
+    upBtn.type = "button";
+    upBtn.className = "queue-item-move";
+    upBtn.title = "Move up";
+    upBtn.textContent = "\u25b2";
+    upBtn.disabled = i === 0;
+    upBtn.addEventListener("click", () => moveInQueue(i, -1));
+    reorderBtns.appendChild(upBtn);
+
+    const downBtn = document.createElement("button");
+    downBtn.type = "button";
+    downBtn.className = "queue-item-move";
+    downBtn.title = "Move down";
+    downBtn.textContent = "\u25bc";
+    downBtn.disabled = i === state.queue.length - 1;
+    downBtn.addEventListener("click", () => moveInQueue(i, 1));
+    reorderBtns.appendChild(downBtn);
+
+    row.appendChild(reorderBtns);
 
     const icon = makeItemIcon(entry.itemHrid);
     row.appendChild(icon);

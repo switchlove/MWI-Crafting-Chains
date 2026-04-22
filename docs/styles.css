@@ -779,6 +779,33 @@ body.icons-disabled .material-name-cell {
   color: var(--ink);
 }
 
+.queue-item-reorder {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.queue-item-move {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 0.55rem;
+  padding: 0 3px;
+  line-height: 1;
+  border-radius: 3px;
+}
+
+.queue-item-move:hover:not(:disabled) {
+  color: var(--accent);
+  background: var(--accent-muted, #eef);
+}
+
+.queue-item-move:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
 .queue-item-remove {
   background: none;
   border: none;
