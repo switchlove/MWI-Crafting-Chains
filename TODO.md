@@ -3,17 +3,7 @@
 ## Features
 
 ### High Priority
-- [ ] **Shareable URL** — encode item name, quantity, queue, and strategy into the URL hash so a link pre-fills the form and can be shared
-- [ ] **Queue quantity editing** — allow editing the quantity of an already-queued item in-place (click label or pencil icon) without having to remove and re-add it
-- [ ] **Recipe Pinning** — when an item has multiple recipe options, allow the user to manually pin a specific recipe for that item (overrides the global sort strategy for that node); persist pinned recipes in the session
-
----
-
-### Medium Priority
 - [ ] **Time to Gather** — estimate how long gathering missing base materials would take given skill levels and gear (requires action lookup for gathering nodes)
-- [ ] **Step-by-Step time column** — show estimated time per step in the Flat Crafting Order table so the user knows which steps are the bottleneck
-- [ ] **Market price age indicator** — show when `marketplace.json` was last refreshed (timestamp from the file or a GitHub Actions badge) so users know how stale the prices are
-- [ ] **Item search history** — show the last N calculated items as quick-fill chips below the item name field for fast re-access
 
 ---
 
@@ -26,6 +16,11 @@
 ---
 
 ## Completed ✓
+- [x] **Shareable URL** — encode item name, quantity, queue, and strategy into the URL hash so a link pre-fills the form and can be shared
+- [x] **Queue quantity editing** — allow editing the quantity of an already-queued item in-place (click label or pencil icon) without having to remove and re-add it
+- [x] **Step-by-Step time column** — show estimated time per step in the Flat Crafting Order table so the user knows which steps are the bottleneck
+- [x] **Market price age indicator** — show when `marketplace.json` was last refreshed (timestamp from the file or a GitHub Actions badge) so users know how stale the prices are
+- [x] **Item search history** — show the last N calculated items as quick-fill chips below the item name field for fast re-access
 - [x] **Best Drinks: fix bonus column** — Artisan/Gourmet buffs don't reduce action time; display what they actually do (e.g. "cooking level +5", "quality +12%", "material savings") instead of implying a speed gain
 - [x] **Best Drinks: Apply button** — one-click fills the drink slots in Player Data from the current recommendations
 - [x] **Best Drinks: highlight already-equipped** — visually flag recommendations that match the currently-entered drink slots so it's clear what's new vs already active

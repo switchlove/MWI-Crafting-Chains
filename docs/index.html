@@ -28,7 +28,7 @@
       <section class="panel controls-panel reveal">
         <div class="controls-actions">
           <div class="load-data-group">
-            <button id="loadDataBtn" class="btn btn-secondary btn-sm">Load Data</button>
+            <button id="loadDataBtn" class="btn btn-secondary">Load Data</button>
             <span id="dataStatus" class="status"></span>
           </div>
           <button type="button" class="btn btn-settings" id="settingsBtn" title="Settings">⚙ Settings</button>
@@ -71,24 +71,29 @@
       </dialog>
 
       <section class="panel controls-panel reveal">
+        <div id="itemHistory" class="item-history" hidden></div>
         <div class="controls-grid">
           <label>
             <span>Item name</span>
             <input id="itemName" type="text" placeholder="Expert Tea Crate" list="itemNameOptions" />
           </label>
-          <label>
-            <span>Or item HRID</span>
-            <input id="itemHrid" type="text" placeholder="/items/basic_food_crate" />
-          </label>
+          <input id="itemHrid" type="hidden" />
           <div class="qty-field-wrap">
-            <label>
-              <span>Quantity</span>
+            <label for="quantity"><span>Quantity</span></label>
+            <div class="qty-input-row">
               <input id="quantity" type="number" min="1" value="1" />
-            </label>
-            <div class="qty-presets">
-              <button type="button" class="qty-preset-btn" data-qty="1">×1</button>
-              <button type="button" class="qty-preset-btn" data-qty="10">×10</button>
-              <button type="button" class="qty-preset-btn" data-qty="100">×100</button>
+              <div class="qty-presets">
+                <div class="qty-presets-row">
+                  <button type="button" class="qty-preset-btn" data-qty="1">×1</button>
+                  <button type="button" class="qty-preset-btn" data-qty="10">×10</button>
+                  <button type="button" class="qty-preset-btn" data-qty="100">×100</button>
+                </div>
+                <div class="qty-presets-row">
+                  <button type="button" class="qty-preset-btn" data-qty="1000">×1k</button>
+                  <button type="button" class="qty-preset-btn" data-qty="10000">×10k</button>
+                  <button type="button" class="qty-preset-btn" data-qty="100000">×100k</button>
+                </div>
+              </div>
             </div>
           </div>
           <label>
@@ -105,6 +110,7 @@
           <button id="addQueueBtn" class="btn btn-secondary">Add to Queue</button>
           <button id="calculateBtn" class="btn btn-primary">Calculate Chain</button>
           <button id="exampleBtn" class="btn btn-secondary">Load Example</button>
+          <button id="copyLinkBtn" class="btn btn-secondary" style="margin-left:auto" title="Copy a shareable link to this queue">Copy Link</button>
         </div>
         <div id="queueListWrap" class="queue-list-wrap" hidden>
           <div class="queue-list-header">
@@ -510,6 +516,7 @@ With the Toolasha Bridge userscript installed, the top-right button becomes a Lo
       <section class="panel reveal">
         <div class="panel-header-row">
           <h2>Base Materials</h2>
+          <span id="priceAge" class="price-age"></span>
           <button id="copyMaterialsBtn" class="btn btn-secondary btn-sm" disabled title="Copy base materials list to clipboard">Copy</button>
           <button type="button" class="section-toggle-btn" data-collapse-target="baseMaterialsBody" aria-expanded="true">Collapse</button>
         </div>

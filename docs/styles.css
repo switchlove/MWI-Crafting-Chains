@@ -149,6 +149,12 @@ h1 {
   display: grid;
   gap: 14px;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: end;
+}
+
+.controls-grid > label {
+  display: flex;
+  flex-direction: column;
 }
 
 label span {
@@ -221,14 +227,31 @@ textarea:focus {
 
 .qty-field-wrap {
   display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.qty-input-row {
+  display: flex;
   align-items: flex-end;
   gap: 8px;
 }
 
+.qty-input-row #quantity {
+  width: 120px;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
 .qty-presets {
   display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.qty-presets-row {
+  display: flex;
   gap: 4px;
-  padding-bottom: 1px;
 }
 
 .qty-preset-btn {
@@ -779,6 +802,30 @@ body.icons-disabled .material-name-cell {
   color: var(--ink);
 }
 
+.queue-item-qty {
+  cursor: text;
+  border-bottom: 1px dashed var(--ink-soft);
+  padding-bottom: 1px;
+}
+
+.queue-item-qty:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.queue-item-qty-input {
+  width: 4.5ch;
+  font: inherit;
+  font-weight: 600;
+  text-align: right;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 0 3px;
+  background: var(--card);
+  color: var(--ink);
+  outline: none;
+}
+
 .queue-item-reorder {
   display: flex;
   flex-direction: column;
@@ -820,6 +867,55 @@ body.icons-disabled .material-name-cell {
 .queue-item-remove:hover {
   color: #b8412d;
   background: #fff0f0;
+}
+
+.item-history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+
+.history-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px 2px 4px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  background: var(--card);
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.history-chip:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.history-chip .item-icon-frame {
+  width: 20px;
+  height: 20px;
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.history-chip .item-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.price-age {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  margin-right: auto;
 }
 
 /* Per-item tree label in multi-item mode */
@@ -1380,6 +1476,12 @@ tr.best-tea-row:nth-child(3) .best-tea-rank {
   border-radius: 4px;
   border: 1px solid #a8b8f1;
   background: #ffffff;
+}
+
+.craft-order-step .step-time {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--ink);
 }
 
 .craft-order-step::before {

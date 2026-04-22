@@ -24,6 +24,6 @@ if (!res.ok) {
 const json = await res.json();
 const data = json.marketData ?? json;
 mkdirSync('docs/data', { recursive: true });
-writeFileSync(OUTPUT, JSON.stringify(data));
+writeFileSync(OUTPUT, JSON.stringify({ updatedAt: new Date().toISOString(), marketData: data }));
 console.log(`[prices] Saved ${Object.keys(data).length} items to ${OUTPUT}`);
 

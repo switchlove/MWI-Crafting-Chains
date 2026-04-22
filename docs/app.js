@@ -47,6 +47,7 @@ const MARKET_JSON = "./data/marketplace.json";
 const PRICE_CACHE_MS = 5 * 60 * 1000; // 5 min TTL before re-fetching the file
 let _marketDataPromise = null;
 let _marketDataTs = 0;
+let _marketUpdatedAt = null; // ISO string from the JSON file
 
 function _toItemKey(name) {
   return '/items/' + name.toLowerCase()
@@ -62,15 +63,34 @@ async function _getMarketData() {
   _marketDataTs = Date.now();
   _marketDataPromise = fetch(MARKET_JSON)
     .then(res => res.ok ? res.json() : null)
-    .then(json => json?.marketData ?? json)
+    .then(json => {
+      if (json?.updatedAt) _marketUpdatedAt = json.updatedAt;
+      return json?.marketData ?? json;
+    })
     .catch(() => null);
   return _marketDataPromise;
+}
+
+function setPriceAge() {
+  const el = document.getElementById('priceAge');
+  if (!el) return;
+  if (!_marketUpdatedAt) { el.textContent = ''; return; }
+  const diffMs = Date.now() - new Date(_marketUpdatedAt).getTime();
+  const diffMin = Math.round(diffMs / 60000);
+  let age;
+  if (diffMin < 2) age = 'just now';
+  else if (diffMin < 60) age = `${diffMin}m ago`;
+  else if (diffMin < 1440) age = `${Math.round(diffMin / 60)}h ago`;
+  else age = `${Math.round(diffMin / 1440)}d ago`;
+  el.textContent = `Prices updated ${age}`;
+  el.title = new Date(_marketUpdatedAt).toLocaleString();
 }
 
 async function fetchMarketPrice(itemName) {
   const cached = state.priceCache.get(itemName);
   if (cached && Date.now() - cached.ts < PRICE_CACHE_MS) return cached;
   const data = await _getMarketData();
+  setPriceAge();
   if (!data) return null;
   const tier = data[_toItemKey(itemName)]?.['0'];
   if (!tier) return null;
@@ -87,6 +107,7 @@ const elements = {
   itemName: document.getElementById("itemName"),
   itemNameOptions: document.getElementById("itemNameOptions"),
   itemHrid: document.getElementById("itemHrid"),
+  itemHistory: document.getElementById("itemHistory"),
   quantity: document.getElementById("quantity"),
   recipeStrategy: document.getElementById("recipeStrategy"),
   inventoryJson: document.getElementById("inventoryJson"),
@@ -96,6 +117,7 @@ const elements = {
   clearQueueBtn: document.getElementById("clearQueueBtn"),
   calculateBtn: document.getElementById("calculateBtn"),
   exampleBtn: document.getElementById("exampleBtn"),
+  copyLinkBtn: document.getElementById("copyLinkBtn"),
   exportJsonBtn: document.getElementById("exportJsonBtn"),
   exportCsvBtn: document.getElementById("exportCsvBtn"),
   copyMaterialsBtn: document.getElementById("copyMaterialsBtn"),
@@ -710,6 +732,7 @@ function buildCraftTree(itemHrid, quantity, strategy, userHouseLevels, userGearS
     isBaseMaterial: false,
     action,
     children,
+    ownTimeSeconds: ownTime,
     totalTimeSeconds: ownTime + childTime,
   };
 }
@@ -777,6 +800,7 @@ function collectCraftingOrder(node) {
         itemHrid: n.itemHrid,
         itemName: n.itemName,
         craftsNeeded: n.craftsNeeded,
+        ownTimeSeconds: n.ownTimeSeconds,
         action: n.action,
         order: counter++,
       });
@@ -797,6 +821,7 @@ function mergeCraftingOrders(orders) {
     order.forEach((step) => {
       if (merged.has(step.itemHrid)) {
         merged.get(step.itemHrid).craftsNeeded += step.craftsNeeded;
+        merged.get(step.itemHrid).ownTimeSeconds = (merged.get(step.itemHrid).ownTimeSeconds || 0) + (step.ownTimeSeconds || 0);
       } else {
         merged.set(step.itemHrid, { ...step, order: orderIndex++ });
       }
@@ -845,6 +870,13 @@ function renderCraftingOrder(target, emptyEl, steps, userSkillLevels) {
         : skillName;
       badge.textContent = `${skillName} ${req.level}`;
       li.appendChild(badge);
+    }
+
+    if (step.ownTimeSeconds > 0) {
+      const timeSpan = document.createElement("span");
+      timeSpan.className = "node-meta step-time";
+      timeSpan.textContent = formatDuration(step.ownTimeSeconds);
+      li.appendChild(timeSpan);
     }
 
     if (step.action) {
@@ -1882,6 +1914,7 @@ function calculate() {
       skillRows: skillRows.map((row) => ({ skill: row.skill, minLevel: row.minLevel })),
     };
     setExportEnabled(true);
+    recordCalcHistory(queueItems);
 
     const missingKinds = materialRows.filter((row) => row.missing > 0).length;
     const missingTotal = materialRows.reduce((sum, row) => sum + row.missing, 0);
@@ -1987,6 +2020,7 @@ function addToQueue() {
   state.queue.push({ itemHrid, itemName, quantity });
   renderQueueList();
   debouncedSave();
+  debouncedWriteHash();
   setStatus(`Added ${quantity}\u00d7 ${itemName} to queue (${state.queue.length} item${state.queue.length > 1 ? "s" : ""} queued).`);
 }
 
@@ -1994,6 +2028,7 @@ function removeFromQueue(index) {
   state.queue.splice(index, 1);
   renderQueueList();
   debouncedSave();
+  debouncedWriteHash();
 }
 
 function moveInQueue(index, direction) {
@@ -2004,6 +2039,7 @@ function moveInQueue(index, direction) {
   state.queue[newIndex] = tmp;
   renderQueueList();
   debouncedSave();
+  debouncedWriteHash();
 }
 
 function renderQueueList() {
@@ -2041,7 +2077,39 @@ function renderQueueList() {
 
     const lbl = document.createElement("span");
     lbl.className = "queue-item-label";
-    lbl.textContent = `${entry.quantity}\u00d7 ${entry.itemName}`;
+
+    const qtySpan = document.createElement("span");
+    qtySpan.className = "queue-item-qty";
+    qtySpan.title = "Click to edit quantity";
+    qtySpan.textContent = String(entry.quantity);
+    qtySpan.addEventListener("click", () => {
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = "1";
+      input.step = "1";
+      input.value = String(entry.quantity);
+      input.className = "queue-item-qty-input";
+      qtySpan.replaceWith(input);
+      input.select();
+
+      const commit = () => {
+        const val = Math.max(1, Math.round(Number(input.value) || 1));
+        state.queue[i].quantity = val;
+        debouncedSave();
+        debouncedWriteHash();
+        renderQueueList();
+      };
+      const cancel = () => renderQueueList();
+
+      input.addEventListener("blur", commit);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+        if (e.key === "Escape") { input.removeEventListener("blur", commit); cancel(); }
+      });
+    });
+
+    lbl.appendChild(qtySpan);
+    lbl.append("\u00d7 ", entry.itemName);
     row.appendChild(lbl);
 
     const removeBtn = document.createElement("button");
@@ -2101,6 +2169,7 @@ elements.clearQueueBtn.addEventListener("click", () => {
   state.queue = [];
   renderQueueList();
   debouncedSave();
+  debouncedWriteHash();
 });
 elements.itemName.addEventListener("keydown", (e) => { if (e.key === "Enter") calculate(); });
 elements.quantity.addEventListener("keydown", (e) => { if (e.key === "Enter") calculate(); });
@@ -2114,6 +2183,18 @@ elements.exportJsonBtn.addEventListener("click", exportJson);
 elements.exportCsvBtn.addEventListener("click", exportCsv);
 elements.copyMaterialsBtn.addEventListener("click", copyMaterialsToClipboard);
 elements.exportSessionBtn.addEventListener("click", exportSession);
+elements.copyLinkBtn.addEventListener("click", () => {
+  writeHash();
+  navigator.clipboard.writeText(location.href).then(() => {
+    const btn = elements.copyLinkBtn;
+    const orig = btn.textContent;
+    btn.textContent = "Copied!";
+    btn.disabled = true;
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1600);
+  }).catch(() => {
+    prompt("Copy this link:", location.href);
+  });
+});
 elements.importSessionFile.addEventListener("change", (e) => {
   const file = e.target.files && e.target.files[0];
   if (!file) return;
@@ -2129,6 +2210,94 @@ elements.importSessionFile.addEventListener("change", (e) => {
   reader.readAsText(file);
   e.target.value = "";
 });
+
+// ── Item search history ─────────────────────────────────────────────
+const HISTORY_KEY = "mwi_calc_history";
+const HISTORY_MAX = 5;
+
+function loadCalcHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch { return []; }
+}
+
+function recordCalcHistory(queueItems) {
+  let history = loadCalcHistory();
+  // Add each item in the queue (deduplicated, most-recent first)
+  for (const { itemHrid, itemName } of [...queueItems].reverse()) {
+    history = history.filter((h) => h.itemHrid !== itemHrid);
+    history.unshift({ itemHrid, itemName });
+  }
+  history = history.slice(0, HISTORY_MAX);
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch { /* quota */ }
+  renderCalcHistory(history);
+}
+
+function renderCalcHistory(history) {
+  if (!history) history = loadCalcHistory();
+  const el = elements.itemHistory;
+  el.innerHTML = "";
+  if (!history.length) { el.hidden = true; return; }
+  el.hidden = false;
+  history.forEach(({ itemHrid, itemName }) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "history-chip";
+    chip.title = itemHrid;
+    chip.appendChild(makeItemIcon(itemHrid));
+    chip.append(itemName);
+    chip.addEventListener("click", () => {
+      elements.itemName.value = itemName;
+      elements.itemHrid.value = "";
+      elements.itemName.focus();
+      debouncedSave();
+      debouncedWriteHash();
+    });
+    el.appendChild(chip);
+  });
+}
+
+// ── Shareable URL hash ───────────────────────────────────────────────
+function writeHash() {
+  const data = {
+    v: 1,
+    q: state.queue.map((e) => ({ h: e.itemHrid, n: e.itemName, qty: e.quantity })),
+    item: elements.itemName.value.trim(),
+    hrid: elements.itemHrid.value.trim(),
+    qty: Number(elements.quantity.value) || 1,
+    strat: elements.recipeStrategy.value,
+  };
+  if (!data.q.length && !data.item && !data.hrid) {
+    history.replaceState(null, "", location.pathname + location.search);
+    return;
+  }
+  try {
+    history.replaceState(null, "", "#" + btoa(JSON.stringify(data)));
+  } catch { /* ignore */ }
+}
+
+let _hashTimer = null;
+function debouncedWriteHash() {
+  clearTimeout(_hashTimer);
+  _hashTimer = setTimeout(writeHash, 600);
+}
+
+function readHash() {
+  const raw = location.hash.slice(1);
+  if (!raw) return;
+  try {
+    const data = JSON.parse(atob(raw));
+    if (!data || data.v !== 1) return;
+    if (Array.isArray(data.q) && data.q.length > 0) {
+      state.queue = data.q
+        .map((e) => ({ itemHrid: e.h, itemName: e.n, quantity: e.qty }))
+        .filter((e) => e.itemHrid && e.itemName && e.quantity > 0);
+      renderQueueList();
+    }
+    if (data.item) elements.itemName.value = data.item;
+    if (data.hrid) elements.itemHrid.value = data.hrid;
+    if (data.qty) elements.quantity.value = String(data.qty);
+    if (data.strat) elements.recipeStrategy.value = data.strat;
+  } catch { /* invalid hash — ignore */ }
+}
 
 // ── Session: auto-save on input ──────────────────────────────────────
 const SESSION_KEY = "mwi_crafting_session";
@@ -2239,11 +2408,16 @@ function debouncedSave() {
 document.querySelectorAll("input[data-skill-hrid], input[data-house-hrid], input[data-gear-slot], input[data-drink-slot]")
   .forEach((el) => el.addEventListener("input", debouncedSave));
 
+[elements.itemName, elements.itemHrid, elements.quantity, elements.recipeStrategy]
+  .forEach((el) => el.addEventListener("input", debouncedWriteHash));
+
 // Restore saved session on load
 try {
   const raw = localStorage.getItem(SESSION_KEY);
   if (raw) restoreSession(JSON.parse(raw));
 } catch { /* ignore */ }
+readHash();
+renderCalcHistory();
 
 initializeUserDataCollapsibles();
 setExportEnabled(false);
