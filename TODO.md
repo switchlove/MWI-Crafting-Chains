@@ -2,19 +2,23 @@
 
 ## Features
 
-### UX / QoL
-- [ ] Shareable URL — encode item name, quantity, and strategy into the URL hash so a link pre-fills the form
+### High Priority
+- [x] **Best Drinks: fix bonus column** — Artisan/Gourmet buffs don't reduce action time; display what they actually do (e.g. "cooking level +5", "quality +12%") instead of implying a speed gain
+- [ ] **Shareable URL** — encode item name, quantity, and strategy into the URL hash so a link pre-fills the form
+- [x] **Best Drinks: Apply button** — one-click fills the drink slots in Player Data from the current recommendations
+- [x] **Drink bonuses in Bonuses Applied** — show all buff types from equipped drinks (artisan, quality, level boosts, etc.) in the Bonuses Applied panel, not just efficiency/speed
 
 ---
 
-### Recipe Pinning
-- [ ] When an item has multiple recipe options, allow the user to manually pin a specific recipe for that item (overrides the global sort strategy for that node)
-- [ ] Persist pinned recipes in the session
+### Medium Priority
+- [ ] **Recipe Pinning** — when an item has multiple recipe options, allow the user to manually pin a specific recipe for that item (overrides the global sort strategy for that node); persist pinned recipes in the session
+- [ ] **Time to Gather** — estimate how long gathering missing base materials would take given skill levels and gear (requires action lookup for gathering nodes)
 
 ---
 
-### Time to Gather
-- [ ] Estimate how long gathering missing base materials would take given skill levels and gear (requires action lookup for gathering nodes)
+### Low Priority / Polish
+- [x] **Best Drinks: highlight already-equipped** — visually flag recommendations that match the currently-entered drink slots so it's clear what's new vs already active
+- [ ] **Queue reordering** — up/down buttons (or drag-to-reorder) for items in the crafting queue
 
 ---
 

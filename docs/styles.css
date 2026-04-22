@@ -202,6 +202,19 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+.load-data-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.load-data-group .status {
+  flex: 1;
+  min-width: 0;
+}
+
 .controls-grid + .controls-actions {
   margin-top: 14px;
 }
@@ -1201,8 +1214,37 @@ tr.row-skill-missing {
   color: var(--ink-soft);
 }
 
+.apply-drinks-btn {
+  margin-top: 10px;
+  padding: 5px 14px;
+  font-size: 0.85rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.apply-drinks-btn:hover {
+  opacity: 0.88;
+}
+
+.best-tea-row td {
+  vertical-align: middle;
+}
+
 .best-tea-row {
   background: var(--card);
+}
+
+.best-tea-row--equipped {
+  background: color-mix(in srgb, var(--card) 80%, #1e7a40 20%);
+}
+
+.best-tea-equipped-badge {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1e7a40;
 }
 
 .best-tea-rank {
@@ -1225,10 +1267,54 @@ tr.best-tea-row:nth-child(3) .best-tea-rank {
   color: #8b4513;
 }
 
+#bestTeas table {
+  width: 100%;
+}
+
+#bestTeas table th:nth-child(1),
+#bestTeas table td:nth-child(1) {
+  width: 2.5rem;
+}
+
+#bestTeas table th:nth-child(2),
+#bestTeas table td:nth-child(2) {
+  min-width: 160px;
+}
+
+#bestTeas table th:nth-child(3),
+#bestTeas table td:nth-child(3) {
+  min-width: 140px;
+}
+
 .best-tea-bonus {
   font-weight: 600;
-  color: #1e7a40;
   white-space: nowrap;
+  line-height: 1.6;
+}
+
+.best-tea-name {
+  white-space: nowrap;
+  min-width: 160px;
+}
+
+.best-tea-name-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.buff-desc {
+  display: block;
+  font-size: 0.85rem;
+}
+
+.buff-desc--speed {
+  color: #1e7a40;
+}
+
+.buff-desc--level {
+  color: #5a6abf;
 }
 
 .best-tea-applies {

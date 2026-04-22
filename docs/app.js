@@ -404,15 +404,20 @@ function collectBonusLines(userHouseLevels, userGearStats, userDrinkBonuses, cha
     const appliesToChain = actionTypes.some((t) => chainActionTypes.has(t));
     if (!appliesToChain) return;
     const buffs = Array.isArray(cd.buffs) ? cd.buffs : [];
-    const relevant = buffs.filter(
-      (b) => b.typeHrid === "/buff_types/efficiency" || b.typeHrid === "/buff_types/action_speed",
-    );
-    if (relevant.length === 0) return;
-    let total = 0;
-    relevant.forEach((buff) => { total += Number(buff.flatBoost || 0) + Number(buff.ratioBoost || 0); });
-    if (total > 0) {
-      lines.push(`${item.name}: +${Math.round(total * 1000) / 10}% speed`);
-    }
+    buffs.forEach((buff) => {
+      const val = Number(buff.flatBoost || 0) + Number(buff.ratioBoost || 0);
+      if (val <= 0) return;
+      const meta = BUFF_TYPE_LABELS[buff.typeHrid];
+      if (meta) {
+        const formatted = meta.format === "pct"
+          ? `+${Math.round(val * 1000) / 10}% ${meta.label}`
+          : `+${val} ${meta.label}`;
+        lines.push(`${item.name}: ${formatted}`);
+      } else {
+        const label = buff.typeHrid.split("/").pop().replace(/_/g, " ");
+        lines.push(`${item.name}: +${Math.round(val * 1000) / 10}% ${label}`);
+      }
+    });
   });
 
   return lines;
@@ -1114,7 +1119,7 @@ function recommendBestTeas(chainActionTypes) {
     const familyKey = buffs[0].uniqueHrid || item.hrid;
     const score = flatBonus * coveredTypes.length;
 
-    candidates.push({ name: item.name, hrid: item.hrid, flatBonus, coveredTypes, score, familyKey });
+    candidates.push({ name: item.name, hrid: item.hrid, flatBonus, coveredTypes, score, familyKey, buffs });
   });
 
   if (candidates.length === 0) return [];
@@ -1144,6 +1149,45 @@ function recommendBestTeas(chainActionTypes) {
   return result;
 }
 
+const BUFF_TYPE_LABELS = {
+  "/buff_types/efficiency":          { label: "efficiency",      format: "pct" },
+  "/buff_types/action_speed":        { label: "action speed",    format: "pct" },
+  "/buff_types/artisan":             { label: "material savings", format: "pct" },
+  "/buff_types/gourmet":             { label: "quality",         format: "pct" },
+  "/buff_types/cooking_level":       { label: "cooking level",   format: "flat" },
+  "/buff_types/brewing_level":       { label: "brewing level",   format: "flat" },
+  "/buff_types/crafting_level":      { label: "crafting level",  format: "flat" },
+  "/buff_types/cheesesmithing_level":{ label: "cheesesmithing level", format: "flat" },
+  "/buff_types/tailoring_level":     { label: "tailoring level", format: "flat" },
+  "/buff_types/alchemy_level":       { label: "alchemy level",   format: "flat" },
+  "/buff_types/enhancing_level":     { label: "enhancing level", format: "flat" },
+  "/buff_types/foraging_level":      { label: "foraging level",  format: "flat" },
+  "/buff_types/woodcutting_level":   { label: "woodcutting level", format: "flat" },
+  "/buff_types/milking_level":       { label: "milking level",   format: "flat" },
+  "/buff_types/action_level":        { label: "action level",    format: "flat" },
+};
+
+function describeDrinkBuffs(buffs) {
+  if (!Array.isArray(buffs) || buffs.length === 0) return "\u2014";
+  const parts = [];
+  buffs.forEach((b) => {
+    const val = Number(b.flatBoost || 0) + Number(b.ratioBoost || 0);
+    if (val === 0) return;
+    const meta = BUFF_TYPE_LABELS[b.typeHrid];
+    if (meta) {
+      const display = meta.format === "pct"
+        ? `+${Math.round(val * 1000) / 10}%`
+        : `+${val}`;
+      parts.push(`<span class="buff-desc buff-desc--${meta.format === "pct" ? "speed" : "level"}">${display} ${meta.label}</span>`);
+    } else {
+      // Fallback: derive label from the hrid tail
+      const tail = b.typeHrid.split("/").pop().replace(/_/g, " ");
+      parts.push(`<span class="buff-desc">${Math.round(val * 1000) / 10 > val ? `+${Math.round(val * 1000) / 10}%` : `+${val}`} ${tail}</span>`);
+    }
+  });
+  return parts.length ? parts.join("") : "\u2014";
+}
+
 function renderBestTeas(target, recommendations, chainActionTypes) {
   target.innerHTML = "";
 
@@ -1155,7 +1199,7 @@ function renderBestTeas(target, recommendations, chainActionTypes) {
   const table = document.createElement("table");
   const thead = document.createElement("thead");
   const trHead = document.createElement("tr");
-  ["#", "Drink", "Bonus", "Applies To"].forEach((h) => {
+  ["#", "Drink", "Effects", "Applies To"].forEach((h) => {
     const th = document.createElement("th");
     th.textContent = h;
     trHead.appendChild(th);
@@ -1163,25 +1207,43 @@ function renderBestTeas(target, recommendations, chainActionTypes) {
   thead.appendChild(trHead);
   table.appendChild(thead);
 
+  const equippedNames = new Set(
+    Array.from(document.querySelectorAll("input[data-drink-slot]"))
+      .map((el) => el.value.trim().toLowerCase())
+      .filter(Boolean)
+  );
+
   const tbody = document.createElement("tbody");
   recommendations.forEach((rec, i) => {
+    const isEquipped = equippedNames.has(rec.name.toLowerCase());
     const tr = document.createElement("tr");
-    tr.className = "best-tea-row";
+    tr.className = "best-tea-row" + (isEquipped ? " best-tea-row--equipped" : "");
 
     const tdRank = document.createElement("td");
     tdRank.className = "best-tea-rank";
-    tdRank.textContent = `${i + 1}`;
+    if (isEquipped) {
+      const badge = document.createElement("span");
+      badge.className = "best-tea-equipped-badge";
+      badge.title = "Already equipped";
+      badge.textContent = "✓";
+      tdRank.appendChild(badge);
+    } else {
+      tdRank.textContent = `${i + 1}`;
+    }
     tr.appendChild(tdRank);
 
     const tdName = document.createElement("td");
-    tdName.classList.add("material-name-cell");
-    tdName.appendChild(makeItemIcon(rec.hrid));
-    tdName.appendChild(document.createTextNode(rec.name));
+    tdName.className = "best-tea-name";
+    const nameWrap = document.createElement("span");
+    nameWrap.className = "best-tea-name-inner";
+    nameWrap.appendChild(makeItemIcon(rec.hrid));
+    nameWrap.appendChild(document.createTextNode(rec.name));
+    tdName.appendChild(nameWrap);
     tr.appendChild(tdName);
 
     const tdBonus = document.createElement("td");
     tdBonus.className = "best-tea-bonus";
-    tdBonus.textContent = `+${Math.round(rec.flatBonus * 1000) / 10}%`;
+    tdBonus.innerHTML = describeDrinkBuffs(rec.buffs);
     tr.appendChild(tdBonus);
 
     const tdApplies = document.createElement("td");
@@ -1196,6 +1258,24 @@ function renderBestTeas(target, recommendations, chainActionTypes) {
 
   table.appendChild(tbody);
   target.appendChild(table);
+
+  // Apply button
+  const applyBtn = document.createElement("button");
+  applyBtn.type = "button";
+  applyBtn.className = "apply-drinks-btn";
+  applyBtn.textContent = "Apply to Drinks";
+  applyBtn.title = "Fill the Drinks slots in Player Data with these recommendations";
+  applyBtn.addEventListener("click", () => {
+    const slots = Array.from(document.querySelectorAll("input[data-drink-slot]"));
+    recommendations.forEach((rec, i) => {
+      if (slots[i]) slots[i].value = rec.name;
+    });
+    // Clear any extra slots
+    for (let i = recommendations.length; i < slots.length; i++) slots[i].value = "";
+    debouncedSave();
+    calculate();
+  });
+  target.appendChild(applyBtn);
 }
 
 async function fetchAndPatchPrices(target, materialRows, summaryEl) {
