@@ -13,21 +13,17 @@
 
 ---
 
-### Multi-Item Queue
-- [ ] Allow queuing multiple target items in a single run (e.g. 3x Potion A + 2x Potion B)
-- [ ] Combine base material requirements across all queued items into a single shopping list
-- [ ] Show per-item subtotals alongside the combined total in the materials table
-- [ ] Aggregate skill requirements across all queued items
-
----
-
 ### Time to Gather
 - [ ] Estimate how long gathering missing base materials would take given skill levels and gear (requires action lookup for gathering nodes)
 
 ---
 
 ## Completed ✓
-
+- [x] Allow queuing multiple target items in a single run (e.g. 3x Potion A + 2x Potion B) — "Add to Queue" button builds a queue; Calculate Chain merges all trees, materials (summed), and skills (max level) into one combined result
+- [x] Combine base material requirements across all queued items into a single shopping list
+- [x] Aggregate skill requirements across all queued items
+- [x] Show per-item subtotals alongside the combined total in the materials table — expandable breakdown rows per material (click ▸ to expand) showing each queued item's contribution
+- [x] Base Materials total cost row — tfoot row summing Need × unit price across all materials
 - [x] Apply `noncombatStats.*Efficiency` (e.g. `brewingEfficiency`) and `skillingEfficiency` from gear to reduce expected `craftsNeeded` — efficiency gives a chance at bonus output, effectively multiplying output count by `(1 + efficiency)`
 - [x] Show efficiency bonuses in "Bonuses Applied" panel alongside speed bonuses
 - [x] Missing materials highlight in tree — shade nodes red/yellow where base materials are short, so you can see which branches you can't start yet

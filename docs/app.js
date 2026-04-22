@@ -38,6 +38,7 @@ const state = {
   itemMap: new Map(),
   skillMap: new Map(),
   houseRoomMap: new Map(),
+  queue: [], // [{itemHrid, itemName, quantity}]
   lastResult: null,
   priceCache: new Map(), // key: itemName → { a, b, ts }
 };
@@ -89,6 +90,10 @@ const elements = {
   quantity: document.getElementById("quantity"),
   recipeStrategy: document.getElementById("recipeStrategy"),
   inventoryJson: document.getElementById("inventoryJson"),
+  addQueueBtn: document.getElementById("addQueueBtn"),
+  queueListWrap: document.getElementById("queueListWrap"),
+  queueList: document.getElementById("queueList"),
+  clearQueueBtn: document.getElementById("clearQueueBtn"),
   calculateBtn: document.getElementById("calculateBtn"),
   exampleBtn: document.getElementById("exampleBtn"),
   exportJsonBtn: document.getElementById("exportJsonBtn"),
@@ -107,6 +112,8 @@ const elements = {
   statBase: document.getElementById("statBase"),
   statSkills: document.getElementById("statSkills"),
   statBonuses: document.getElementById("statBonuses"),
+  bestTeas: document.getElementById("bestTeas"),
+  bestTeasSection: document.getElementById("bestTeasSection"),
 };
 
 elements.dataUrl.value = DEFAULT_DATA_URL;
@@ -295,9 +302,7 @@ function populateDrinkOptions(itemMap) {
     const cd = item?.consumableDetail;
     if (!cd) return;
     const buffs = Array.isArray(cd.buffs) ? cd.buffs : [];
-    const hasRelevant = buffs.some(
-      (b) => b.typeHrid === "/buff_types/efficiency" || b.typeHrid === "/buff_types/action_speed",
-    );
+    const hasRelevant = buffs.length > 0 && buffs.some((b) => Number(b.flatBoost || 0) + Number(b.ratioBoost || 0) > 0);
     if (hasRelevant) drinks.push(item.name);
   });
   drinks.sort();
@@ -777,6 +782,24 @@ function collectCraftingOrder(node) {
   return Array.from(seen.values()).sort((a, b) => a.order - b.order);
 }
 
+/**
+ * Merge multiple crafting orders into one, summing craftsNeeded for shared items.
+ */
+function mergeCraftingOrders(orders) {
+  const merged = new Map();
+  let orderIndex = 0;
+  orders.forEach((order) => {
+    order.forEach((step) => {
+      if (merged.has(step.itemHrid)) {
+        merged.get(step.itemHrid).craftsNeeded += step.craftsNeeded;
+      } else {
+        merged.set(step.itemHrid, { ...step, order: orderIndex++ });
+      }
+    });
+  });
+  return Array.from(merged.values()).sort((a, b) => a.order - b.order);
+}
+
 function renderCraftingOrder(target, emptyEl, steps, userSkillLevels) {
   target.innerHTML = "";
 
@@ -1058,6 +1081,123 @@ function renderSkillsTable(target, skillRows) {
   target.appendChild(table);
 }
 
+/**
+ * Score every drink item against the action types in the current chain.
+ * Returns the top-3 non-overlapping teas sorted by descending combined bonus.
+ * Each result: { name, hrid, bonusByType: Map<actionTypeHrid, bonus>, totalBonus, coveredTypes }
+ */
+function recommendBestTeas(chainActionTypes) {
+  if (!state.itemMap.size || chainActionTypes.size === 0) return [];
+
+  const candidates = [];
+
+  state.itemMap.forEach((item) => {
+    const cd = item?.consumableDetail;
+    if (!cd) return;
+
+    // Filter to drinks usable in at least one of the chain's action types
+    const actionTypes = cd.usableInActionTypeMap ? Object.keys(cd.usableInActionTypeMap) : [];
+    const coveredTypes = actionTypes.filter((t) => chainActionTypes.has(t));
+    if (coveredTypes.length === 0) return;
+
+    const buffs = Array.isArray(cd.buffs) ? cd.buffs : [];
+    if (buffs.length === 0) return;
+
+    // Score = sum of all buff values (flatBoost + ratioBoost) across all buffs on this item.
+    // usableInActionTypeMap already restricts to relevant action types, so any buff on this
+    // item is meaningful for the chain (e.g. efficiency, artisan, gourmet, action_speed, etc.).
+    let flatBonus = 0;
+    buffs.forEach((b) => { flatBonus += Number(b.flatBoost || 0) + Number(b.ratioBoost || 0); });
+    if (flatBonus <= 0) return;
+
+    // Family key: group tiers of the same buff together (e.g. Cooking / Super / Ultra Cooking Tea)
+    const familyKey = buffs[0].uniqueHrid || item.hrid;
+    const score = flatBonus * coveredTypes.length;
+
+    candidates.push({ name: item.name, hrid: item.hrid, flatBonus, coveredTypes, score, familyKey });
+  });
+
+  if (candidates.length === 0) return [];
+
+  // Group by family and score each family as the sum of its members' individual scores.
+  const families = new Map();
+  candidates.forEach((c) => {
+    if (!families.has(c.familyKey)) families.set(c.familyKey, []);
+    families.get(c.familyKey).push(c);
+  });
+
+  const familyList = [];
+  families.forEach((members) => {
+    members.sort((a, b) => b.score - a.score); // best tier first within family
+    const familyScore = members.reduce((sum, m) => sum + m.score, 0);
+    familyList.push({ members, familyScore });
+  });
+  familyList.sort((a, b) => b.familyScore - a.familyScore);
+
+  // Pick the best-scoring tier from each family, one family per slot, up to 3.
+  const result = [];
+  for (const family of familyList) {
+    if (result.length >= 3) break;
+    result.push(family.members[0]); // members already sorted best-tier-first
+  }
+
+  return result;
+}
+
+function renderBestTeas(target, recommendations, chainActionTypes) {
+  target.innerHTML = "";
+
+  if (!recommendations || recommendations.length === 0) {
+    target.innerHTML = "<p class=\"no-data\">No drinks apply to this crafting chain.</p>";
+    return;
+  }
+
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const trHead = document.createElement("tr");
+  ["#", "Drink", "Bonus", "Applies To"].forEach((h) => {
+    const th = document.createElement("th");
+    th.textContent = h;
+    trHead.appendChild(th);
+  });
+  thead.appendChild(trHead);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  recommendations.forEach((rec, i) => {
+    const tr = document.createElement("tr");
+    tr.className = "best-tea-row";
+
+    const tdRank = document.createElement("td");
+    tdRank.className = "best-tea-rank";
+    tdRank.textContent = `${i + 1}`;
+    tr.appendChild(tdRank);
+
+    const tdName = document.createElement("td");
+    tdName.classList.add("material-name-cell");
+    tdName.appendChild(makeItemIcon(rec.hrid));
+    tdName.appendChild(document.createTextNode(rec.name));
+    tr.appendChild(tdName);
+
+    const tdBonus = document.createElement("td");
+    tdBonus.className = "best-tea-bonus";
+    tdBonus.textContent = `+${Math.round(rec.flatBonus * 1000) / 10}%`;
+    tr.appendChild(tdBonus);
+
+    const tdApplies = document.createElement("td");
+    tdApplies.className = "best-tea-applies";
+    tdApplies.textContent = rec.coveredTypes
+      .map((t) => t.split("/").pop().replace(/_/g, " "))
+      .join(", ");
+    tr.appendChild(tdApplies);
+
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody);
+  target.appendChild(table);
+}
+
 async function fetchAndPatchPrices(target, materialRows, summaryEl) {
   const rows = Array.from(target.querySelectorAll("tbody tr[data-item-name]"));
   if (rows.length === 0) return;
@@ -1088,28 +1228,44 @@ async function fetchAndPatchPrices(target, materialRows, summaryEl) {
 
   // Append total missing cost to summary line
   let totalMissingCost = 0;
+  let totalNeedCost = 0;
   let pricesAvailable = false;
   rows.forEach((tr) => {
+    const need = Number(tr.dataset.need);
     const missing = Number(tr.dataset.missing);
     const tdUnit = tr.cells[tr.cells.length - 2];
     const rawPrice = tdUnit.textContent.replace(/,/g, "");
     const unit = parseFloat(rawPrice);
-    if (!isNaN(unit) && missing > 0) {
-      totalMissingCost += Math.ceil(missing) * unit;
-      pricesAvailable = true;
+    if (!isNaN(unit)) {
+      if (missing > 0) {
+        totalMissingCost += Math.ceil(missing) * unit;
+        pricesAvailable = true;
+      }
+      totalNeedCost += Math.ceil(need) * unit;
     }
   });
+
+  // Update footer totals row
+  const tdFootTotal = target.querySelector("[data-totals-row] [data-total-cost]");
+  if (tdFootTotal) {
+    tdFootTotal.textContent = totalNeedCost > 0
+      ? Math.round(totalNeedCost).toLocaleString()
+      : "\u2014";
+    tdFootTotal.classList.remove("price-cell--loading");
+  }
 
   if (pricesAvailable && summaryEl && !summaryEl.hidden) {
     summaryEl.textContent += ` \u00b7 Missing cost: ${Math.round(totalMissingCost).toLocaleString()} coins`;
   }
 }
 
-function renderMaterialsTable(target, materialRows) {
+function renderMaterialsTable(target, materialRows, perItemMaterials = null) {
   if (materialRows.length === 0) {
     target.innerHTML = "<p>No data</p>";
     return;
   }
+
+  const showBreakdown = perItemMaterials && perItemMaterials.length > 1;
 
   const table = document.createElement("table");
   const thead = document.createElement("thead");
@@ -1130,9 +1286,44 @@ function renderMaterialsTable(target, materialRows) {
     tr.dataset.itemName = row.name;
     tr.dataset.need = row.need;
     tr.dataset.missing = row.missing;
-    // Icon + name cell
+
+    // Build per-item breakdown sub-rows first so chevron can reference them
+    const subRows = [];
+    if (showBreakdown) {
+      perItemMaterials.forEach(({ itemName, quantity, materials }) => {
+        const count = materials.get(row.hrid);
+        if (!count) return;
+        const subTr = document.createElement("tr");
+        subTr.className = "material-breakdown-row";
+        subTr.hidden = true;
+        const tdBreak = document.createElement("td");
+        tdBreak.setAttribute("colspan", "7");
+        tdBreak.className = "material-breakdown-cell";
+        const icon = makeItemIcon(row.hrid);
+        icon.style.opacity = "0.6";
+        tdBreak.appendChild(icon);
+        tdBreak.appendChild(document.createTextNode(`${quantity}\u00d7 ${itemName}: ${count} needed`));
+        subTr.appendChild(tdBreak);
+        subRows.push(subTr);
+      });
+    }
+
+    // Icon + name cell (with optional expand chevron)
     const tdName = document.createElement("td");
     tdName.classList.add("material-name-cell");
+
+    if (subRows.length > 0) {
+      const chevron = document.createElement("span");
+      chevron.className = "breakdown-chevron";
+      chevron.textContent = "\u25b8";
+      chevron.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const expanded = chevron.classList.toggle("expanded");
+        subRows.forEach((r) => { r.hidden = !expanded; });
+      });
+      tdName.appendChild(chevron);
+    }
+
     tdName.appendChild(makeItemIcon(row.hrid));
     tdName.appendChild(document.createTextNode(row.name));
     tr.appendChild(tdName);
@@ -1146,19 +1337,41 @@ function renderMaterialsTable(target, materialRows) {
     // Unit price cell
     const tdUnit = document.createElement("td");
     tdUnit.className = "price-cell price-cell--loading";
-    tdUnit.textContent = "…";
+    tdUnit.textContent = "\u2026";
     tr.appendChild(tdUnit);
 
     // Total cost cell
     const tdTotal = document.createElement("td");
     tdTotal.className = "price-cell price-cell--loading";
-    tdTotal.textContent = "…";
+    tdTotal.textContent = "\u2026";
     tr.appendChild(tdTotal);
 
     tbody.appendChild(tr);
+    subRows.forEach((r) => tbody.appendChild(r));
   });
 
   table.appendChild(tbody);
+
+  // Totals footer — prices filled in by fetchAndPatchPrices
+  const tfoot = document.createElement("tfoot");
+  const trFoot = document.createElement("tr");
+  trFoot.setAttribute("data-totals-row", "");
+
+  const tdFootLabel = document.createElement("td");
+  tdFootLabel.setAttribute("colspan", "6");
+  tdFootLabel.className = "totals-label";
+  tdFootLabel.textContent = "Total cost (all needed)";
+  trFoot.appendChild(tdFootLabel);
+
+  const tdFootTotal = document.createElement("td");
+  tdFootTotal.className = "price-cell price-cell--loading";
+  tdFootTotal.dataset.totalCost = "";
+  tdFootTotal.textContent = "…";
+  trFoot.appendChild(tdFootTotal);
+
+  tfoot.appendChild(trFoot);
+  table.appendChild(tfoot);
+
   target.innerHTML = "";
   target.appendChild(table);
 }
@@ -1270,13 +1483,17 @@ function escapeCsv(value) {
 function buildCsvFromLastResult(result) {
   const lines = [];
   const stamp = new Date().toISOString();
+  const targets = result.targets || (result.target ? [result.target] : []);
 
   lines.push("MWI Crafting Chain Export");
   lines.push(`Generated At,${escapeCsv(stamp)}`);
-  lines.push(`Target Item,${escapeCsv(result.target.itemName)}`);
-  lines.push(`Target HRID,${escapeCsv(result.target.itemHrid)}`);
-  lines.push(`Quantity,${escapeCsv(result.target.quantity)}`);
-  lines.push(`Recipe Strategy,${escapeCsv(result.target.strategy)}`);
+  if (targets.length === 1) {
+    lines.push(`Target Item,${escapeCsv(targets[0].itemName)}`);
+    lines.push(`Target HRID,${escapeCsv(targets[0].itemHrid)}`);
+    lines.push(`Quantity,${escapeCsv(targets[0].quantity)}`);
+  } else {
+    lines.push(`Targets,${escapeCsv(targets.map((t) => `${t.quantity}x ${t.itemName}`).join(" | "))}`);
+  }
   lines.push(`Total Time Seconds,${escapeCsv(Math.round(result.stats.totalTimeSeconds))}`);
   lines.push("");
 
@@ -1309,16 +1526,21 @@ function exportJson() {
   }
 
   const result = state.lastResult;
+  const targets = result.targets || (result.target ? [result.target] : []);
+  const trees = result.trees || (result.tree ? [result.tree] : []);
   const payload = {
     generatedAt: new Date().toISOString(),
-    target: result.target,
+    targets,
     stats: result.stats,
     materials: result.materialRows,
     skills: result.skillRows,
-    craftTree: toExportTree(result.tree),
+    craftTrees: trees.map(toExportTree),
   };
 
-  const filename = `${slugifyForFilename(result.target.itemName)}-chain.json`;
+  const baseName = targets.length === 1
+    ? slugifyForFilename(targets[0].itemName)
+    : `queue-${targets.length}-items`;
+  const filename = `${baseName}-chain.json`;
   downloadTextFile(filename, JSON.stringify(payload, null, 2), "application/json");
   setStatus(`Exported ${filename}`);
 }
@@ -1330,7 +1552,11 @@ function exportCsv() {
   }
 
   const result = state.lastResult;
-  const filename = `${slugifyForFilename(result.target.itemName)}-chain.csv`;
+  const targets = result.targets || (result.target ? [result.target] : []);
+  const baseName = targets.length === 1
+    ? slugifyForFilename(targets[0].itemName)
+    : `queue-${targets.length}-items`;
+  const filename = `${baseName}-chain.csv`;
   const csv = buildCsvFromLastResult(result);
   downloadTextFile(filename, csv, "text/csv");
   setStatus(`Exported ${filename}`);
@@ -1384,25 +1610,32 @@ function calculate() {
     return;
   }
 
-  const name = elements.itemName.value.trim();
-  const hrid = elements.itemHrid.value.trim();
-  const quantity = Number(elements.quantity.value || "1");
   const strategy = elements.recipeStrategy.value || DEFAULT_RECIPE_STRATEGY;
 
-  if (!Number.isFinite(quantity) || quantity <= 0) {
-    setStatus("Quantity must be a positive number.", true);
-    return;
-  }
-
-  const itemHrid = hrid || findItemByName(state.itemMap, name);
-  if (!itemHrid) {
-    const suggestions = suggestItems(state.itemMap, name);
-    const message =
-      suggestions.length > 0
-        ? `No match. Try: ${suggestions.map((s) => s.name).join(", ")}`
-        : "No matching item found.";
-    setStatus(message, true);
-    return;
+  // Resolve queue: use explicit queue if non-empty, otherwise fall back to form fields
+  let queueItems;
+  if (state.queue.length > 0) {
+    queueItems = state.queue.slice();
+  } else {
+    const name = elements.itemName.value.trim();
+    const hrid = elements.itemHrid.value.trim();
+    const quantity = Number(elements.quantity.value || "1");
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setStatus("Quantity must be a positive number.", true);
+      return;
+    }
+    const resolvedHrid = hrid || findItemByName(state.itemMap, name);
+    if (!resolvedHrid) {
+      const suggestions = suggestItems(state.itemMap, name);
+      setStatus(
+        suggestions.length > 0
+          ? `No match. Try: ${suggestions.map((s) => s.name).join(", ")}`
+          : "No matching item found.",
+        true,
+      );
+      return;
+    }
+    queueItems = [{ itemHrid: resolvedHrid, itemName: state.itemMap.get(resolvedHrid)?.name || resolvedHrid, quantity }];
   }
 
   try {
@@ -1416,26 +1649,73 @@ function calculate() {
     const userHouseLevels = getUserHouseLevels();
     const userGearStats = getUserGearStats();
     const userDrinkBonuses = getUserDrinkBonuses();
-    const tree = buildCraftTree(itemHrid, quantity, strategy, userHouseLevels, userGearStats, userDrinkBonuses);
-    const materials = collectBaseMaterials(tree);
-    const skills = collectSkills(tree);
-    const totalActions = collectTotalActions(tree);
-    const alternativeItems = collectAlternativeRecipeItems(tree);
-    const inventory = parsedInventory.inventory;
     const userSkillLevels = getUserSkillLevels();
+    const inventory = parsedInventory.inventory;
+
+    // Build a crafting tree for each queue item
+    const trees = queueItems.map(({ itemHrid, quantity }) =>
+      buildCraftTree(itemHrid, quantity, strategy, userHouseLevels, userGearStats, userDrinkBonuses)
+    );
+
+    // Merge base materials (sum counts across all items)
+    const mergedMaterials = new Map();
+    trees.forEach((tree) => {
+      collectBaseMaterials(tree).forEach((count, hrid) => {
+        mergedMaterials.set(hrid, (mergedMaterials.get(hrid) || 0) + count);
+      });
+    });
+
+    // Merge skills (max required level)
+    const mergedSkills = new Map();
+    trees.forEach((tree) => {
+      collectSkills(tree).forEach((level, hrid) => {
+        mergedSkills.set(hrid, Math.max(mergedSkills.get(hrid) || 0, level));
+      });
+    });
+
+    // Merge alternatives and action types
+    const alternativeItems = new Set();
+    const chainActionTypes = new Set();
+    trees.forEach((tree) => {
+      collectAlternativeRecipeItems(tree).forEach((h) => alternativeItems.add(h));
+      collectActionTypes(tree).forEach((t) => chainActionTypes.add(t));
+    });
+
+    // Combined totals
+    let totalActions = 0;
+    let totalTimeSeconds = 0;
+    trees.forEach((tree) => {
+      totalActions += collectTotalActions(tree);
+      totalTimeSeconds += tree.totalTimeSeconds;
+    });
+
+    // Missing map based on merged totals
     const missingMap = inventory.size > 0
-      ? new Map(Array.from(materials.entries()).map(([hrid, need]) => {
+      ? new Map(Array.from(mergedMaterials.entries()).map(([hrid, need]) => {
           const have = inventory.get(hrid) || 0;
           return [hrid, { need, have, missing: Math.max(0, need - have) }];
         }))
       : null;
 
-    renderTree(tree, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses, missingMap);
+    // Render crafting trees — one per item, with label when queuing multiple
+    elements.tree.innerHTML = "";
+    trees.forEach((tree, i) => {
+      if (trees.length > 1) {
+        const lbl = document.createElement("p");
+        lbl.className = "queue-tree-label";
+        lbl.textContent = `${queueItems[i].quantity}\u00d7 ${queueItems[i].itemName}`;
+        elements.tree.appendChild(lbl);
+      }
+      const rootList = document.createElement("ul");
+      rootList.appendChild(renderTreeNode(tree, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses, missingMap));
+      elements.tree.appendChild(rootList);
+    });
 
-    const craftingOrder = collectCraftingOrder(tree);
-    renderCraftingOrder(elements.craftOrder, elements.craftOrderEmpty, craftingOrder, userSkillLevels);
+    // Merged step-by-step crafting order
+    const mergedOrder = mergeCraftingOrders(trees.map((t) => collectCraftingOrder(t)));
+    renderCraftingOrder(elements.craftOrder, elements.craftOrderEmpty, mergedOrder, userSkillLevels);
 
-    const materialRows = Array.from(materials.entries())
+    const materialRows = Array.from(mergedMaterials.entries())
       .map(([materialHrid, count]) => {
         const have = inventory.get(materialHrid) || 0;
         const missing = Math.max(0, count - have);
@@ -1449,7 +1729,7 @@ function calculate() {
       })
       .sort((a, b) => b.missing - a.missing || b.need - a.need);
 
-    const skillRows = Array.from(skills.entries())
+    const skillRows = Array.from(mergedSkills.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([skillHrid, level]) => {
         const userLevel = userSkillLevels.get(skillHrid);
@@ -1464,15 +1744,24 @@ function calculate() {
         };
       });
 
-    renderMaterialsTable(elements.materials, materialRows);
+    renderMaterialsTable(elements.materials, materialRows, queueItems.length > 1 ? queueItems.map(({ itemHrid, itemName, quantity }, i) => ({
+      itemHrid,
+      itemName,
+      quantity,
+      materials: collectBaseMaterials(trees[i]),
+    })) : null);
     renderSkillsTable(elements.skills, skillRows);
+
+    // Best teas recommendation
+    const teaRecs = recommendBestTeas(chainActionTypes);
+    renderBestTeas(elements.bestTeas, teaRecs, chainActionTypes);
+    elements.bestTeasSection.hidden = false;
 
     // Async price fetch — patches table cells in-place after render
     fetchAndPatchPrices(elements.materials, materialRows, elements.materialsSummary);
 
     // Materials summary line
-    const hasMissing = materialRows.some((r) => r.missing > 0);
-    const hasInventory = parsedInventory.inventory.size > 0;
+    const hasInventory = inventory.size > 0;
     if (hasInventory) {
       const missingKindCount = materialRows.filter((r) => r.missing > 0).length;
       if (missingKindCount === 0) {
@@ -1488,12 +1777,12 @@ function calculate() {
       elements.materialsSummary.hidden = true;
     }
 
-    elements.statTime.textContent = formatDuration(tree.totalTimeSeconds);
+    elements.statTime.textContent = formatDuration(totalTimeSeconds);
     elements.statActions.textContent = String(totalActions);
     elements.statBase.textContent = String(materialRows.length);
     elements.statSkills.textContent = String(skillRows.length);
 
-    const bonusLines = collectBonusLines(userHouseLevels, userGearStats, userDrinkBonuses, collectActionTypes(tree));
+    const bonusLines = collectBonusLines(userHouseLevels, userGearStats, userDrinkBonuses, chainActionTypes);
     elements.statBonuses.innerHTML = "";
     if (bonusLines.length === 0) {
       elements.statBonuses.textContent = "None";
@@ -1506,18 +1795,9 @@ function calculate() {
     }
 
     state.lastResult = {
-      target: {
-        itemHrid,
-        itemName: state.itemMap.get(itemHrid)?.name || itemHrid,
-        quantity,
-        strategy,
-      },
-      stats: {
-        totalTimeSeconds: tree.totalTimeSeconds,
-        baseMaterialKinds: materialRows.length,
-        skillKinds: skillRows.length,
-      },
-      tree,
+      targets: queueItems,
+      stats: { totalTimeSeconds, baseMaterialKinds: materialRows.length, skillKinds: skillRows.length },
+      trees,
       materialRows,
       skillRows: skillRows.map((row) => ({ skill: row.skill, minLevel: row.minLevel })),
     };
@@ -1525,14 +1805,17 @@ function calculate() {
 
     const missingKinds = materialRows.filter((row) => row.missing > 0).length;
     const missingTotal = materialRows.reduce((sum, row) => sum + row.missing, 0);
+    const targetDesc = queueItems.length === 1
+      ? (state.itemMap.get(queueItems[0].itemHrid)?.name || queueItems[0].itemHrid)
+      : `${queueItems.length} queued items`;
 
     if (alternativeItems.size === 0) {
       setStatus(
-        `Calculated chain for ${state.itemMap.get(itemHrid)?.name || itemHrid}. Missing: ${missingKinds} material type(s), ${Math.round(missingTotal)} total units. No alternate recipes in this chain.`,
+        `Calculated chain for ${targetDesc}. Missing: ${missingKinds} material type(s), ${Math.round(missingTotal)} total units. No alternate recipes in this chain.`,
       );
     } else {
       setStatus(
-        `Calculated chain for ${state.itemMap.get(itemHrid)?.name || itemHrid}. Missing: ${missingKinds} material type(s), ${Math.round(missingTotal)} total units. Alternate recipe options exist for ${alternativeItems.size} item(s).`,
+        `Calculated chain for ${targetDesc}. Missing: ${missingKinds} material type(s), ${Math.round(missingTotal)} total units. Alternate recipe options exist for ${alternativeItems.size} item(s).`,
       );
     }
   } catch (error) {
@@ -1596,6 +1879,70 @@ function loadExample() {
   });
 }
 
+// ── Queue management ────────────────────────────────────────────────
+function addToQueue() {
+  if (!state.itemDetailMap || !state.actionDetailMap) {
+    setStatus("Load data before adding to queue.", true);
+    return;
+  }
+  const name = elements.itemName.value.trim();
+  const hrid = elements.itemHrid.value.trim();
+  const quantity = Number(elements.quantity.value || "1");
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    setStatus("Quantity must be a positive number.", true);
+    return;
+  }
+  const itemHrid = hrid || findItemByName(state.itemMap, name);
+  if (!itemHrid) {
+    const suggestions = suggestItems(state.itemMap, name);
+    setStatus(
+      suggestions.length > 0
+        ? `No match. Try: ${suggestions.map((s) => s.name).join(", ")}`
+        : "No matching item found.",
+      true,
+    );
+    return;
+  }
+  const itemName = state.itemMap.get(itemHrid)?.name || itemHrid;
+  state.queue.push({ itemHrid, itemName, quantity });
+  renderQueueList();
+  debouncedSave();
+  setStatus(`Added ${quantity}\u00d7 ${itemName} to queue (${state.queue.length} item${state.queue.length > 1 ? "s" : ""} queued).`);
+}
+
+function removeFromQueue(index) {
+  state.queue.splice(index, 1);
+  renderQueueList();
+  debouncedSave();
+}
+
+function renderQueueList() {
+  elements.queueListWrap.hidden = state.queue.length === 0;
+  elements.queueList.innerHTML = "";
+  state.queue.forEach((entry, i) => {
+    const row = document.createElement("div");
+    row.className = "queue-item";
+
+    const icon = makeItemIcon(entry.itemHrid);
+    row.appendChild(icon);
+
+    const lbl = document.createElement("span");
+    lbl.className = "queue-item-label";
+    lbl.textContent = `${entry.quantity}\u00d7 ${entry.itemName}`;
+    row.appendChild(lbl);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "queue-item-remove";
+    removeBtn.title = "Remove from queue";
+    removeBtn.textContent = "\u00d7";
+    removeBtn.addEventListener("click", () => removeFromQueue(i));
+    row.appendChild(removeBtn);
+
+    elements.queueList.appendChild(row);
+  });
+}
+
 function initializeUserDataCollapsibles() {
   const STORAGE_PREFIX = "mwi_section_collapsed_";
   const toggles = document.querySelectorAll(".section-toggle-btn[data-collapse-target]");
@@ -1636,6 +1983,12 @@ function initializeUserDataCollapsibles() {
 
 elements.loadDataBtn.addEventListener("click", loadData);
 elements.calculateBtn.addEventListener("click", calculate);
+elements.addQueueBtn.addEventListener("click", addToQueue);
+elements.clearQueueBtn.addEventListener("click", () => {
+  state.queue = [];
+  renderQueueList();
+  debouncedSave();
+});
 elements.itemName.addEventListener("keydown", (e) => { if (e.key === "Enter") calculate(); });
 elements.quantity.addEventListener("keydown", (e) => { if (e.key === "Enter") calculate(); });
 elements.exampleBtn.addEventListener("click", loadExample);
@@ -1695,6 +2048,7 @@ function captureSession() {
     houses,
     gear,
     drinks,
+    queue: state.queue.slice(),
   };
 }
 
@@ -1731,6 +2085,10 @@ function restoreSession(data) {
       const v = data.drinks[el.dataset.drinkSlot];
       if (v !== undefined) el.value = v;
     });
+  }
+  if (Array.isArray(data.queue)) {
+    state.queue = data.queue.filter((e) => e && e.itemHrid && e.itemName && e.quantity > 0);
+    renderQueueList();
   }
 }
 

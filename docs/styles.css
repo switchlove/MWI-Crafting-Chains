@@ -719,6 +719,123 @@ body.icons-disabled .material-name-cell {
   margin-left: auto;
 }
 
+/* Queue list */
+.queue-list-wrap {
+  margin-top: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: var(--bg);
+}
+
+.queue-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.queue-list-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 0.9rem;
+}
+
+.queue-item-label {
+  flex: 1;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.queue-item-remove {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0 4px;
+  line-height: 1;
+  border-radius: 4px;
+}
+
+.queue-item-remove:hover {
+  color: #b8412d;
+  background: #fff0f0;
+}
+
+/* Per-item tree label in multi-item mode */
+.queue-tree-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin: 14px 0 4px;
+  padding: 4px 8px;
+  background: var(--bg);
+  border-left: 3px solid #6678d4;
+  border-radius: 0 4px 4px 0;
+}
+
+/* Per-item breakdown rows in materials table */
+.breakdown-chevron {
+  display: inline-block;
+  margin-right: 5px;
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: transform 0.15s;
+  user-select: none;
+  vertical-align: middle;
+}
+
+.breakdown-chevron.expanded {
+  transform: rotate(90deg);
+}
+
+.material-breakdown-row td {
+  padding-top: 2px;
+  padding-bottom: 2px;
+  background: var(--bg);
+  border-top: none;
+}
+
+.material-breakdown-cell {
+  padding-left: 2.4rem !important;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.material-breakdown-cell .item-icon-frame {
+  width: 14px;
+  height: 14px;
+}
+
+.material-breakdown-cell .item-icon {
+  width: 14px;
+  height: 14px;
+}
+
 .materials-summary {
   margin: 0 0 10px;
   font-size: 0.9rem;
@@ -1022,6 +1139,30 @@ tr.row-missing {
   font-size: 0.82rem;
 }
 
+tfoot tr[data-totals-row] {
+  border-top: 2px solid var(--line);
+}
+
+tfoot tr[data-totals-row] td {
+  padding-top: 7px;
+  padding-bottom: 7px;
+  background: var(--bg);
+}
+
+.totals-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+tfoot tr[data-totals-row] [data-total-cost] {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
 tr.row-missing td:nth-child(5) {
   font-weight: 600;
   color: #b8412d;
@@ -1051,6 +1192,49 @@ tr.row-skill-missing {
 
 .skill-status-cell--bad {
   color: #b8412d;
+}
+
+/* Best Drinks section */
+.best-teas-hint {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.best-tea-row {
+  background: var(--card);
+}
+
+.best-tea-rank {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--ink-soft);
+  text-align: center;
+  width: 2rem;
+}
+
+tr.best-tea-row:first-child .best-tea-rank {
+  color: #b8860b;
+}
+
+tr.best-tea-row:nth-child(2) .best-tea-rank {
+  color: #888;
+}
+
+tr.best-tea-row:nth-child(3) .best-tea-rank {
+  color: #8b4513;
+}
+
+.best-tea-bonus {
+  font-weight: 600;
+  color: #1e7a40;
+  white-space: nowrap;
+}
+
+.best-tea-applies {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  text-transform: capitalize;
 }
 
 .skill-status-cell--unknown {

@@ -100,8 +100,16 @@
           </label>
         </div>
         <div class="controls-actions">
+          <button id="addQueueBtn" class="btn btn-secondary">Add to Queue</button>
           <button id="calculateBtn" class="btn btn-primary">Calculate Chain</button>
           <button id="exampleBtn" class="btn btn-secondary">Load Example</button>
+        </div>
+        <div id="queueListWrap" class="queue-list-wrap" hidden>
+          <div class="queue-list-header">
+            <span class="queue-list-title">Queued Items</span>
+            <button type="button" id="clearQueueBtn" class="btn-clear">Clear All</button>
+          </div>
+          <div id="queueList" class="queue-list"></div>
         </div>
       </section>
 
@@ -462,6 +470,17 @@ With the Toolasha Bridge userscript installed, the top-right button becomes a Lo
         </div>
         <div id="skillReqsBody">
           <div id="skills" class="table-wrap"></div>
+        </div>
+      </section>
+
+      <section id="bestTeasSection" class="panel reveal" hidden>
+        <div class="panel-header-row">
+          <h2>Best Drinks</h2>
+          <button type="button" class="section-toggle-btn" data-collapse-target="bestTeasBody" aria-expanded="true">Collapse</button>
+        </div>
+        <div id="bestTeasBody">
+          <p class="best-teas-hint">Best drinks for this crafting chain, one per family. Equip all three simultaneously for maximum effect.</p>
+          <div id="bestTeas" class="table-wrap"></div>
         </div>
       </section>
 
