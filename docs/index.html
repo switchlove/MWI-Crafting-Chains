@@ -32,8 +32,27 @@
             <span id="dataStatus" class="status"></span>
           </div>
           <button type="button" class="btn btn-settings" id="settingsBtn" title="Settings">⚙ Settings</button>
+          <button type="button" class="btn btn-help" id="shortcutsBtn" title="Keyboard shortcuts">?</button>
         </div>
       </section>
+
+      <!-- Keyboard shortcuts modal -->
+      <dialog id="shortcutsModal" class="settings-modal">
+        <div class="settings-modal-header">
+          <h2 class="settings-modal-title">Keyboard Shortcuts</h2>
+          <button type="button" class="settings-modal-close" id="shortcutsModalClose" aria-label="Close shortcuts">✕</button>
+        </div>
+        <div class="settings-modal-body">
+          <table class="shortcuts-table">
+            <tbody>
+              <tr><td><kbd>Enter</kbd></td><td>Calculate chain (from item name or quantity field)</td></tr>
+              <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Navigate autocomplete suggestions in item name field</td></tr>
+              <tr><td><kbd>Esc</kbd></td><td>Close any open modal</td></tr>
+              <tr><td><kbd>?</kbd></td><td>Open this shortcuts reference</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </dialog>
 
       <!-- Settings modal -->
       <dialog id="settingsModal" class="settings-modal">
@@ -581,6 +600,24 @@ With the Toolasha Bridge userscript installed, the top-right button becomes a Lo
           var modal     = document.getElementById('settingsModal');
           var openBtn   = document.getElementById('settingsBtn');
           var closeBtn  = document.getElementById('settingsModalClose');
+
+          // Keyboard shortcuts modal
+          var shortcutsModal    = document.getElementById('shortcutsModal');
+          var shortcutsBtn      = document.getElementById('shortcutsBtn');
+          var shortcutsCloseBtn = document.getElementById('shortcutsModalClose');
+
+          shortcutsBtn.addEventListener('click', function () { shortcutsModal.showModal(); });
+          shortcutsCloseBtn.addEventListener('click', function () { shortcutsModal.close(); });
+          shortcutsModal.addEventListener('click', function (e) { if (e.target === shortcutsModal) shortcutsModal.close(); });
+
+          document.addEventListener('keydown', function (e) {
+            if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+              var tag = document.activeElement && document.activeElement.tagName;
+              if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+              e.preventDefault();
+              shortcutsModal.showModal();
+            }
+          });
 
           openBtn.addEventListener('click', function () {
             modal.showModal();

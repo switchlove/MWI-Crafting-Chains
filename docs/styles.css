@@ -452,6 +452,21 @@ textarea:focus {
   background: var(--card);
   color: var(--ink);
 }
+.btn-help {
+  font-size: 0.82rem;
+  padding: 4px 9px;
+  background: transparent;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1;
+}
+.btn-help:hover {
+  background: var(--card);
+  color: var(--ink);
+}
 
 /* Settings modal */
 .settings-modal {
@@ -496,6 +511,34 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+/* Shortcuts table inside the modal */
+.shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+.shortcuts-table td {
+  padding: 7px 8px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink);
+}
+.shortcuts-table tr:last-child td { border-bottom: none; }
+.shortcuts-table td:first-child { white-space: nowrap; padding-right: 16px; }
+.shortcuts-table td:last-child { color: var(--ink-soft); }
+kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 0.78rem;
+  font-family: inherit;
+  font-weight: 600;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  color: var(--ink);
 }
 .settings-section {
   display: flex;

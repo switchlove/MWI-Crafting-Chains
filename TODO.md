@@ -4,18 +4,24 @@
 
 ### High Priority
 - [ ] **Time to Gather** — estimate how long gathering missing base materials would take given skill levels and gear (requires action lookup for gathering nodes)
+- [ ] **Buy vs craft per node** — show market buy price next to estimated craft cost on each intermediate tree node so users can decide whether to skip crafting a sub-component
+- [ ] **Profit / loss per craft** — show `(market sell price − base material cost)` for the target item; useful for "crafting to sell" decisions
+- [ ] **Mark intermediate as "buy"** — let users click a crafted node to flag it as "buy from market instead", removing its sub-tree and adding it to the shopping list at market price; recalculate totals accordingly
 
 ---
 
 ### Low Priority / Polish
 - [ ] **Compact tree option** — toggle to collapse intermediate crafted nodes in the tree to a single row, showing only base materials and the target
 - [ ] **Print / PDF layout** — `@media print` styles that hide the controls panel and show only the results (tree, materials, step-by-step) cleanly on paper
-- [ ] **Keyboard shortcut reference** — small `?` button (or footer link) that opens a modal listing all keyboard shortcuts (Enter to calculate, etc.)
-- [ ] **Dark / light theme override** — manual toggle that persists in `localStorage`, independent of system preference
+- [ ] **Named session presets** — save and load multiple named configurations in `localStorage` (e.g. "Daily potions", "Grandmaster run") beyond the single auto-save slot
+- [ ] **Total actions per skill** — in the Skill Requirements table, show total crafting actions alongside the level requirement so users can estimate XP gain
+- [ ] **Crafting order export** — download or copy the flat step-by-step order as a numbered text checklist for use in Discord or external tracking
+- [ ] **Wiki link in UI** — small footer or toolbar link to the GitHub wiki for new users
 
 ---
 
 ## Completed ✓
+- [x] **Keyboard shortcut reference** — small `?` button (or footer link) that opens a modal listing all keyboard shortcuts (Enter to calculate, etc.)
 - [x] **Shareable URL** — encode item name, quantity, queue, and strategy into the URL hash so a link pre-fills the form and can be shared
 - [x] **Queue quantity editing** — allow editing the quantity of an already-queued item in-place (click label or pencil icon) without having to remove and re-add it
 - [x] **Step-by-Step time column** — show estimated time per step in the Flat Crafting Order table so the user knows which steps are the bottleneck
