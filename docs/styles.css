@@ -75,6 +75,25 @@ body::before {
   z-index: 1;
 }
 
+.site-footer {
+  margin-top: 40px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #8899cc;
+}
+.site-footer a {
+  color: #a0b0e8;
+  text-decoration: none;
+}
+.site-footer a:hover {
+  color: #d4ddff;
+  text-decoration: underline;
+}
+.site-footer-sep {
+  margin: 0 8px;
+  opacity: 0.5;
+}
+
 .hero {
   margin-bottom: 20px;
 }
@@ -762,6 +781,13 @@ body.icons-disabled .material-name-cell {
   border-color: #3e5192;
 }
 
+.btn-secondary.btn-active {
+  background: linear-gradient(180deg, #3a508f, #2d3f70);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,.3);
+  outline: 2px solid #a0b4ff;
+  outline-offset: 1px;
+}
+
 .btn-sm {
   padding: 2px 10px;
   font-size: 0.82rem;
@@ -1365,6 +1391,13 @@ tr.row-skill-missing {
   text-align: center;
 }
 
+.skill-actions-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
 .skill-status-cell--ok {
   color: #1f7a3f;
 }
@@ -1591,4 +1624,113 @@ body.icons-disabled .craft-order-step {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+/* ── Print / PDF layout ──────────────────────────────────────── */
+@media print {
+  /* Force light background and black ink */
+  *, *::before, *::after {
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Hide non-result UI */
+  .bg-orb,
+  .hero,
+  .controls-panel,
+  .bonuses-panel,
+  #bestTeasSection,
+  .section-toggle-btn,
+  .btn-sm,
+  .price-age,
+  .site-footer,
+  dialog,
+  .item-history,
+  .notes {
+    display: none !important;
+  }
+
+  body {
+    font-size: 11pt;
+  }
+
+  .page {
+    width: 100%;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* Clean up panels for paper */
+  .panel {
+    border: 1px solid #ccc !important;
+    border-radius: 4px !important;
+    padding: 12px !important;
+    margin-bottom: 16px !important;
+    page-break-inside: avoid;
+  }
+
+  /* Stats row — keep compact */
+  .panel.stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  /* Make panel headers stand out */
+  .panel-header-row h2,
+  .panel h2 {
+    font-size: 13pt;
+    border-bottom: 1px solid #999;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10pt;
+  }
+  th, td {
+    border: 1px solid #ccc !important;
+    padding: 4px 8px !important;
+  }
+  thead {
+    background: #f0f0f0 !important;
+  }
+  tr { page-break-inside: avoid; }
+
+  /* Tree */
+  .tree ul { page-break-inside: avoid; }
+  .node-line {
+    font-size: 10pt;
+    padding: 2px 0;
+  }
+
+  /* Craft order list */
+  .craft-order-list {
+    font-size: 10pt;
+  }
+  .craft-order-step {
+    padding: 3px 0;
+    border-bottom: 1px solid #eee !important;
+  }
+
+  /* Skill badges — print as plain text */
+  .skill-badge {
+    border: 1px solid #ccc !important;
+    font-size: 8pt;
+  }
+
+  /* Collapse expanded bodies even if JS has them collapsed */
+  .collapsible-body[hidden] {
+    display: block !important;
+  }
+
+  /* Page break hints */
+  .panel.stats,
+  #craft-order,
+  #tree { page-break-after: auto; }
 }

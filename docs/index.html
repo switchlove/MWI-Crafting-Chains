@@ -514,6 +514,7 @@ With the Toolasha Bridge userscript installed, the top-right button becomes a Lo
       <section class="panel reveal">
         <div class="panel-header-row">
           <h2>Crafting Tree</h2>
+          <button id="compactTreeBtn" type="button" class="btn btn-secondary btn-sm" title="Show only the target item and its base materials, hiding intermediate nodes">Compact</button>
           <button type="button" class="section-toggle-btn" data-collapse-target="craftingTreeBody" aria-expanded="true">Collapse</button>
         </div>
         <div id="craftingTreeBody">
@@ -524,6 +525,7 @@ With the Toolasha Bridge userscript installed, the top-right button becomes a Lo
       <section class="panel reveal">
         <div class="panel-header-row">
           <h2>Step-by-Step Crafting Order</h2>
+          <button id="copyCraftOrderBtn" class="btn btn-secondary btn-sm" disabled title="Copy step-by-step order to clipboard">Copy</button>
           <button type="button" class="section-toggle-btn" data-collapse-target="craftOrderBody" aria-expanded="true">Collapse</button>
         </div>
         <div id="craftOrderBody">
@@ -567,6 +569,14 @@ With the Toolasha Bridge userscript installed, the top-right button becomes a Lo
           <li>Time estimate sums action times in the tree and applies matching house efficiency/action-speed bonuses.</li>
         </ul>
       </section>
+
+      <footer class="site-footer">
+        <a href="https://github.com/switchlove/MWI-Crafting-Chains/wiki" target="_blank" rel="noopener">Wiki</a>
+        <span class="site-footer-sep">·</span>
+        <a href="https://github.com/switchlove/MWI-Crafting-Chains" target="_blank" rel="noopener">GitHub</a>
+        <span class="site-footer-sep">·</span>
+        <span>Not affiliated with Milky Way Idle</span>
+      </footer>
     </main>
 
     <datalist id="itemNameOptions"></datalist>

@@ -41,6 +41,8 @@ const state = {
   queue: [], // [{itemHrid, itemName, quantity}]
   lastResult: null,
   priceCache: new Map(), // key: itemName → { a, b, ts }
+  compactTree: false,
+  lastRenderArgs: null,
 };
 
 const MARKET_JSON = "./data/marketplace.json";
@@ -121,11 +123,13 @@ const elements = {
   exportJsonBtn: document.getElementById("exportJsonBtn"),
   exportCsvBtn: document.getElementById("exportCsvBtn"),
   copyMaterialsBtn: document.getElementById("copyMaterialsBtn"),
+  copyCraftOrderBtn: document.getElementById("copyCraftOrderBtn"),
   craftOrder: document.getElementById("craft-order"),
   craftOrderEmpty: document.getElementById("craftOrderEmpty"),
   exportSessionBtn: document.getElementById("exportSessionBtn"),
   importSessionFile: document.getElementById("importSessionFile"),
   tree: document.getElementById("tree"),
+  compactTreeBtn: document.getElementById("compactTreeBtn"),
   materials: document.getElementById("materials"),
   materialsSummary: document.getElementById("materialsSummary"),
   skills: document.getElementById("skills"),
@@ -763,6 +767,17 @@ function collectSkills(node, totals = new Map()) {
   return totals;
 }
 
+function collectSkillActions(node, totals = new Map()) {
+  if (!node.isBaseMaterial) {
+    const skillHrid = node.action?.levelRequirement?.skillHrid;
+    if (skillHrid) {
+      totals.set(skillHrid, (totals.get(skillHrid) || 0) + (node.craftsNeeded || 0));
+    }
+  }
+  node.children.forEach((child) => collectSkillActions(child, totals));
+  return totals;
+}
+
 function collectAlternativeRecipeItems(node, out = new Set()) {
   const candidates = state.actionByOutput.get(node.itemHrid) || [];
   if (candidates.length > 1) {
@@ -940,6 +955,131 @@ function renderTree(node, userSkillLevels, userHouseLevels, userGearStats, userD
   elements.tree.appendChild(rootList);
 }
 
+/**
+ * Collect all base-material leaves of a tree, merging quantities for duplicates.
+ * Returns a Map<itemHrid, { itemHrid, itemName, totalQty }>.
+ */
+function collectFlatBaseMaterials(node) {
+  const result = new Map();
+  function walk(n) {
+    if (n.isBaseMaterial) {
+      const existing = result.get(n.itemHrid);
+      if (existing) {
+        existing.totalQty += n.quantityRequested;
+      } else {
+        result.set(n.itemHrid, { itemHrid: n.itemHrid, itemName: n.itemName, totalQty: n.quantityRequested });
+      }
+      return;
+    }
+    n.children.forEach(walk);
+  }
+  walk(node);
+  return result;
+}
+
+/**
+ * Render a tree in compact mode: root item at top, flat list of base materials below.
+ */
+function renderTreeNodeCompact(node, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses, missingMap) {
+  const li = document.createElement("li");
+  const line = document.createElement("div");
+  line.className = "node-line";
+
+  const title = `${node.itemName} x${node.quantityRequested}`;
+  line.appendChild(makeItemIcon(node.itemHrid));
+  line.appendChild(document.createTextNode(title));
+
+  const metaSpan = document.createElement("span");
+  metaSpan.className = "node-meta";
+  const intermediateCount = countIntermediateNodes(node);
+  metaSpan.textContent = ` - ${intermediateCount} intermediate node${intermediateCount !== 1 ? "s" : ""} hidden`;
+  line.appendChild(metaSpan);
+
+  li.appendChild(line);
+
+  // Flat list of all base materials
+  const baseMats = collectFlatBaseMaterials(node);
+  if (baseMats.size > 0) {
+    const childList = document.createElement("ul");
+    childList.className = "node-children";
+    baseMats.forEach(({ itemHrid, itemName, totalQty }) => {
+      const matLi = document.createElement("li");
+      const matLine = document.createElement("div");
+      matLine.className = "node-line node-line--base";
+
+      if (missingMap) {
+        const m = missingMap.get(itemHrid);
+        if (m) {
+          if (m.have === 0) matLine.classList.add("node-line--have-none");
+          else if (m.missing > 0) matLine.classList.add("node-line--have-partial");
+          else matLine.classList.add("node-line--have-all");
+        }
+      }
+
+      matLine.appendChild(makeItemIcon(itemHrid));
+      matLine.appendChild(document.createTextNode(`${itemName} x${totalQty}`));
+
+      const matMeta = document.createElement("span");
+      matMeta.className = "node-meta";
+      const m = missingMap?.get(itemHrid);
+      if (m) {
+        matMeta.textContent = m.missing > 0
+          ? ` - have ${m.have} · need ${m.need} · short ${m.missing}`
+          : ` - have ${m.have} · need ${m.need}`;
+      } else {
+        matMeta.textContent = " - base material";
+      }
+      matLine.appendChild(matMeta);
+      matLi.appendChild(matLine);
+      childList.appendChild(matLi);
+    });
+    li.appendChild(childList);
+  }
+
+  return li;
+}
+
+function countIntermediateNodes(node) {
+  if (node.isBaseMaterial) return 0;
+  let count = 0;
+  function walk(n, isRoot) {
+    if (!isRoot && !n.isBaseMaterial) count++;
+    n.children?.forEach((c) => walk(c, false));
+  }
+  walk(node, true);
+  return count;
+}
+
+/**
+ * Render all trees into elements.tree, respecting state.compactTree.
+ * Also stores render args on state.lastRenderArgs so toggle can re-render without recalculating.
+ */
+function renderTrees(trees, queueItems, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses, missingMap) {
+  state.lastRenderArgs = { trees, queueItems, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses, missingMap };
+  _renderTreesNow();
+}
+
+function _renderTreesNow() {
+  if (!state.lastRenderArgs) return;
+  const { trees, queueItems, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses, missingMap } = state.lastRenderArgs;
+  elements.tree.innerHTML = "";
+  trees.forEach((tree, i) => {
+    if (trees.length > 1) {
+      const lbl = document.createElement("p");
+      lbl.className = "queue-tree-label";
+      lbl.textContent = `${queueItems[i].quantity}\u00d7 ${queueItems[i].itemName}`;
+      elements.tree.appendChild(lbl);
+    }
+    const rootList = document.createElement("ul");
+    if (state.compactTree) {
+      rootList.appendChild(renderTreeNodeCompact(tree, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses, missingMap));
+    } else {
+      rootList.appendChild(renderTreeNode(tree, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses, missingMap));
+    }
+    elements.tree.appendChild(rootList);
+  });
+}
+
 function makeItemIcon(itemHrid) {
   const iconId = itemHrid.replace("/items/", "");
   const frame = document.createElement("span");
@@ -1068,7 +1208,7 @@ function renderSkillsTable(target, skillRows) {
   const thead = document.createElement("thead");
   const trHead = document.createElement("tr");
 
-  ["Skill", "Min Level", "Your Level", "Status"].forEach((h) => {
+  ["Skill", "Min Level", "Your Level", "Actions", "Status"].forEach((h) => {
     const th = document.createElement("th");
     th.textContent = h;
     trHead.appendChild(th);
@@ -1095,6 +1235,11 @@ function renderSkillsTable(target, skillRows) {
     const tdHave = document.createElement("td");
     tdHave.textContent = row.hasLevel ? String(row.userLevel) : "-";
     tr.appendChild(tdHave);
+
+    const tdActions = document.createElement("td");
+    tdActions.className = "skill-actions-cell";
+    tdActions.textContent = row.totalActions > 0 ? row.totalActions.toLocaleString() : "-";
+    tr.appendChild(tdActions);
 
     const tdStatus = document.createElement("td");
     tdStatus.className = "skill-status-cell";
@@ -1527,6 +1672,7 @@ function setExportEnabled(enabled) {
   elements.exportJsonBtn.disabled = !enabled;
   elements.exportCsvBtn.disabled = !enabled;
   elements.copyMaterialsBtn.disabled = !enabled;
+  elements.copyCraftOrderBtn.disabled = !enabled;
 }
 
 function copyMaterialsToClipboard() {
@@ -1536,6 +1682,29 @@ function copyMaterialsToClipboard() {
     .join("\n");
   navigator.clipboard.writeText(lines).then(() => {
     const btn = elements.copyMaterialsBtn;
+    const prev = btn.textContent;
+    btn.textContent = "Copied!";
+    setTimeout(() => { btn.textContent = prev; }, 1500);
+  });
+}
+
+function copyCraftOrderToClipboard() {
+  if (!state.lastResult) return;
+  const steps = state.lastResult.craftOrder;
+  if (!steps || steps.length === 0) return;
+  const lines = steps.map((step, i) => {
+    const skillHrid = step.action?.levelRequirement?.skillHrid;
+    const skillName = skillHrid
+      ? (state.skillMap.get(skillHrid)?.name ?? skillHrid.split("/").pop().replace(/_/g, " "))
+      : null;
+    const levelPart = step.action?.levelRequirement?.level
+      ? ` [${skillName} ${step.action.levelRequirement.level}]`
+      : "";
+    const timePart = step.ownTimeSeconds > 0 ? ` (${formatDuration(step.ownTimeSeconds)})` : "";
+    return `${i + 1}. ${step.itemName} ×${step.craftsNeeded}${levelPart}${timePart}`;
+  });
+  navigator.clipboard.writeText(lines.join("\n")).then(() => {
+    const btn = elements.copyCraftOrderBtn;
     const prev = btn.textContent;
     btn.textContent = "Copied!";
     setTimeout(() => { btn.textContent = prev; }, 1500);
@@ -1623,9 +1792,9 @@ function buildCsvFromLastResult(result) {
   lines.push("");
 
   lines.push("Skill Requirements");
-  lines.push("Skill,Min Level");
+  lines.push("Skill,Min Level,Actions");
   result.skillRows.forEach((row) => {
-    lines.push([row.skill, row.minLevel].map(escapeCsv).join(","));
+    lines.push([row.skill, row.minLevel, row.totalActions || 0].map(escapeCsv).join(","));
   });
 
   return lines.join("\n");
@@ -1703,6 +1872,7 @@ async function loadData() {
     state.houseRoomMap = new Map(Object.entries(state.houseRoomDetailMap));
     state.actionByOutput = buildActionLookup(data.actionDetailMap);
     state.lastResult = null;
+    state.lastRenderArgs = null;
     setExportEnabled(false);
     populateItemAutocomplete(state.itemMap);
     populateGearOptions(state.itemMap);
@@ -1779,9 +1949,13 @@ function calculate() {
 
     // Merge skills (max required level)
     const mergedSkills = new Map();
+    const mergedSkillActions = new Map();
     trees.forEach((tree) => {
       collectSkills(tree).forEach((level, hrid) => {
         mergedSkills.set(hrid, Math.max(mergedSkills.get(hrid) || 0, level));
+      });
+      collectSkillActions(tree).forEach((actions, hrid) => {
+        mergedSkillActions.set(hrid, (mergedSkillActions.get(hrid) || 0) + actions);
       });
     });
 
@@ -1810,18 +1984,7 @@ function calculate() {
       : null;
 
     // Render crafting trees — one per item, with label when queuing multiple
-    elements.tree.innerHTML = "";
-    trees.forEach((tree, i) => {
-      if (trees.length > 1) {
-        const lbl = document.createElement("p");
-        lbl.className = "queue-tree-label";
-        lbl.textContent = `${queueItems[i].quantity}\u00d7 ${queueItems[i].itemName}`;
-        elements.tree.appendChild(lbl);
-      }
-      const rootList = document.createElement("ul");
-      rootList.appendChild(renderTreeNode(tree, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses, missingMap));
-      elements.tree.appendChild(rootList);
-    });
+    renderTrees(trees, queueItems, userSkillLevels, userHouseLevels, userGearStats, userDrinkBonuses, missingMap);
 
     // Merged step-by-step crafting order
     const mergedOrder = mergeCraftingOrders(trees.map((t) => collectCraftingOrder(t)));
@@ -1853,6 +2016,7 @@ function calculate() {
           userLevel: hasLevel ? userLevel : null,
           hasLevel,
           meets: hasLevel ? userLevel >= level : false,
+          totalActions: mergedSkillActions.get(skillHrid) || 0,
         };
       });
 
@@ -1911,7 +2075,8 @@ function calculate() {
       stats: { totalTimeSeconds, baseMaterialKinds: materialRows.length, skillKinds: skillRows.length },
       trees,
       materialRows,
-      skillRows: skillRows.map((row) => ({ skill: row.skill, minLevel: row.minLevel })),
+      skillRows: skillRows.map((row) => ({ skill: row.skill, minLevel: row.minLevel, totalActions: row.totalActions })),
+      craftOrder: mergedOrder,
     };
     setExportEnabled(true);
     recordCalcHistory(queueItems);
@@ -2182,6 +2347,13 @@ document.querySelectorAll(".qty-preset-btn").forEach((btn) => {
 elements.exportJsonBtn.addEventListener("click", exportJson);
 elements.exportCsvBtn.addEventListener("click", exportCsv);
 elements.copyMaterialsBtn.addEventListener("click", copyMaterialsToClipboard);
+elements.copyCraftOrderBtn.addEventListener("click", copyCraftOrderToClipboard);
+elements.compactTreeBtn.addEventListener("click", () => {
+  state.compactTree = !state.compactTree;
+  elements.compactTreeBtn.classList.toggle("btn-active", state.compactTree);
+  elements.compactTreeBtn.setAttribute("aria-pressed", String(state.compactTree));
+  _renderTreesNow();
+});
 elements.exportSessionBtn.addEventListener("click", exportSession);
 elements.copyLinkBtn.addEventListener("click", () => {
   writeHash();

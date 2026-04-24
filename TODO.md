@@ -11,16 +11,16 @@
 ---
 
 ### Low Priority / Polish
-- [ ] **Compact tree option** — toggle to collapse intermediate crafted nodes in the tree to a single row, showing only base materials and the target
-- [ ] **Print / PDF layout** — `@media print` styles that hide the controls panel and show only the results (tree, materials, step-by-step) cleanly on paper
 - [ ] **Named session presets** — save and load multiple named configurations in `localStorage` (e.g. "Daily potions", "Grandmaster run") beyond the single auto-save slot
-- [ ] **Total actions per skill** — in the Skill Requirements table, show total crafting actions alongside the level requirement so users can estimate XP gain
-- [ ] **Crafting order export** — download or copy the flat step-by-step order as a numbered text checklist for use in Discord or external tracking
-- [ ] **Wiki link in UI** — small footer or toolbar link to the GitHub wiki for new users
 
 ---
 
 ## Completed ✓
+- [x] **Compact tree option** — toggle button in the Crafting Tree panel header that collapses all intermediate crafted nodes, showing only the target item and its flat list of base materials (quantities merged across all paths)
+- [x] **Print / PDF layout** — `@media print` styles that hide controls and show only results (stats, tree, step-by-step, materials, skill requirements) cleanly on paper
+- [x] **Crafting order export** — Copy button on the Step-by-Step panel copies a numbered checklist (item, crafts, skill req, time) to clipboard
+- [x] **Wiki link in UI** — small footer link to the GitHub wiki and repo for new users
+- [x] **Total actions per skill** — in the Skill Requirements table, show total crafting actions alongside the level requirement so users can estimate XP gain
 - [x] **Keyboard shortcut reference** — small `?` button (or footer link) that opens a modal listing all keyboard shortcuts (Enter to calculate, etc.)
 - [x] **Shareable URL** — encode item name, quantity, queue, and strategy into the URL hash so a link pre-fills the form and can be shared
 - [x] **Queue quantity editing** — allow editing the quantity of an already-queued item in-place (click label or pencil icon) without having to remove and re-add it
